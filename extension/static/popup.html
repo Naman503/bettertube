@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BetterTube</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <img src="icons/icon-32.png" alt="" width="22" height="22" />
+        <span class="name">BetterTube</span>
+        <span id="version" class="version"></span>
+      </div>
+      <span id="tab-status" class="status" hidden></span>
+    </header>
+
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button role="tab" data-tab="home" aria-selected="true"><span data-icon="home"></span>Home</button>
+      <button role="tab" data-tab="youtube" aria-selected="false"><span data-icon="youtube"></span>YouTube</button>
+      <button role="tab" data-tab="speed" aria-selected="false"><span data-icon="speed"></span>Speed</button>
+      <button role="tab" data-tab="health" aria-selected="false"><span data-icon="health"></span>Health</button>
+    </nav>
+
+    <div id="alerts"></div>
+
+    <main data-panel="home">
+      <section class="card today">
+        <div class="today-main">
+          <div class="label">Watched today</div>
+          <div class="hero" id="stat-watch">0s</div>
+          <div class="limit" id="limit" hidden>
+            <div class="limit-bar"><div class="limit-fill" id="limit-fill"></div></div>
+            <div class="limit-text" id="limit-text"></div>
+          </div>
+        </div>
+        <dl class="today-grid">
+          <div><dt>Videos</dt><dd id="stat-videos">0</dd></div>
+          <div><dt>On YouTube</dt><dd id="stat-active">0s</dd></div>
+          <div><dt>Saved by speed</dt><dd id="stat-saved">0s</dd></div>
+        </dl>
+        <button id="open-dashboard" class="btn primary wide">Open dashboard</button>
+      </section>
+
+      <h2 class="section-title">Quick switches</h2>
+      <div class="quick" id="quick"></div>
+
+      <h2 class="section-title">Presets</h2>
+      <div class="presets" id="presets"></div>
+    </main>
+
+    <main data-panel="youtube" hidden>
+      <label class="search">
+        <span data-icon="search"></span>
+        <input id="search" type="search" placeholder="Search settings" aria-label="Search settings" />
+      </label>
+      <div id="sections"></div>
+      <p class="footer-row"><button id="reset" class="link">Reset YouTube settings</button></p>
+    </main>
+
+    <main data-panel="speed" hidden>
+      <div id="speed-now" class="card speed-now" hidden></div>
+      <section class="card">
+        <h3>Controller</h3>
+        <div id="speed-general"></div>
+      </section>
+      <section class="card" id="site-speeds-card" hidden>
+        <div class="card-head">
+          <h3>Site speeds</h3>
+          <button id="forget-sites" class="link" hidden>Forget all</button>
+        </div>
+        <div id="site-speeds" class="site-speeds"></div>
+      </section>
+      <section class="card">
+        <h3>Gradual speed-up</h3>
+        <p class="hint">While you watch, speed creeps up by a tiny step until your max. Too small to notice, but it adds up. Change the speed yourself any time.</p>
+        <div id="ramp-paused" class="ramp-paused" hidden></div>
+        <div id="speed-ramp"></div>
+        <p class="ramp-eta" id="ramp-eta"></p>
+      </section>
+      <section class="card">
+        <div class="card-head">
+          <h3>Shortcuts</h3>
+          <button id="add-shortcut" class="btn small">Add</button>
+        </div>
+        <p class="hint">Click a key box, then press the key you want. Shortcuts work when no text field is focused.</p>
+        <div id="shortcuts" class="shortcuts"></div>
+        <p class="footer-row"><button id="speed-defaults" class="link">Restore default shortcuts</button></p>
+      </section>
+      <section class="card">
+        <h3>Turned off on these sites</h3>
+        <p class="hint">One per line. Plain text matches anywhere in the address; <code>/regex/</code> for patterns.</p>
+        <textarea id="blacklist" rows="3" spellcheck="false" placeholder="meet.google.com"></textarea>
+      </section>
+    </main>
+
+    <main data-panel="health" hidden>
+      <div class="diag-actions">
+        <button id="diag-refresh" class="btn">Run checks</button>
+        <button id="diag-copy" class="btn">Copy diagnostics</button>
+      </div>
+      <p id="diag-note" class="hint"></p>
+      <ul id="diag-list" class="diag"></ul>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,5 @@
+node_modules/
+extension/dist/
+extension/test-results/
+*.zip
+.DS_Store
