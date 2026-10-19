@@ -636,6 +636,7 @@ const CSS = `
   -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   font: 600 13px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-variant-numeric: tabular-nums; user-select: none; transition: opacity .15s;
+  width: max-content; white-space: nowrap; /* the host is 0 wide; don't wrap labels */
 }
 .ctl.hidden { display: none; }
 .ctl.flash { opacity: 1 !important; }
@@ -654,7 +655,7 @@ button:focus-visible { outline: 2px solid #3ea6ff; outline-offset: 1px; }
 .btns button { font-weight: 500; color: rgba(255,255,255,.85); }
 .sep { width: 1px; height: 14px; background: rgba(255,255,255,.18); margin: 0 2px; }
 .panel {
-  position: absolute; top: calc(100% + 6px); left: 0; width: 264px; padding: 12px;
+  position: absolute; top: calc(100% + 6px); left: 0; width: 264px; padding: 12px; white-space: normal;
   border-radius: 12px; background: rgba(20,20,20,.96); box-shadow: 0 8px 28px rgba(0,0,0,.45);
   display: grid; gap: 10px; font-weight: 500;
 }
@@ -817,18 +818,19 @@ class Controller {
 
   /** Show a word in place of the speed for a moment ("Speed-up on"). */
   flashLabel(text: string) {
+    const ms = text.length > 12 ? 2500 : 1200; // give sentences time to be read
     this.label = text;
     this.update();
-    this.blink();
+    this.blink(ms);
     clearTimeout(this.labelTimer);
     this.labelTimer = setTimeout(() => {
       this.label = null;
       this.update();
-    }, 1200);
+    }, ms);
   }
 
   /** Briefly show a hidden overlay so key presses get feedback. */
-  blink() {
+  blink(ms = 1000) {
     if (!hiddenAll || !active) return;
     this.ctl.classList.remove('hidden');
     this.ctl.classList.add('flash');
@@ -836,7 +838,7 @@ class Controller {
     this.flashTimer = setTimeout(() => {
       this.ctl.classList.remove('flash');
       this.update();
-    }, 1000);
+    }, ms);
   }
 
   private dragOrClick(e: PointerEvent) {
