@@ -14,7 +14,9 @@ export type SpeedAction =
   | 'mute'
   | 'mark'
   | 'jump'
-  | 'ramp';
+  | 'ramp'
+  | 'rampHoldVideo'
+  | 'rampPauseFor';
 
 export type SpeedDecimals = 'auto' | 0 | 1 | 2 | 3;
 
@@ -42,6 +44,8 @@ export const rampEffectOf = (sc: Pick<Shortcut, 'action' | 'ramp'>): RampEffect 
 
 /** chrome.storage.local: gradual speed-up paused by a shortcut (shared by all tabs, survives videos). */
 export const RAMP_PAUSED_KEY = 'rampPaused';
+/** chrome.storage.local: timestamp until which gradual speed-up is paused ("pause for N min"). */
+export const RAMP_PAUSED_UNTIL_KEY = 'rampPausedUntil';
 
 export interface SpeedSettings {
   enabled: boolean;
@@ -151,6 +155,8 @@ export const ACTIONS: Record<SpeedAction, { label: string; title: string; hasVal
   mark: { label: 'Set marker', hasValue: false, title: 'Remember the current time' },
   jump: { label: 'Jump to marker', hasValue: false, title: 'Go back to the remembered time' },
   ramp: { label: 'Speed-up', hasValue: false, title: 'Turn gradual speed-up on or off' },
+  rampHoldVideo: { label: 'Stop this video', hasValue: false, title: 'Stop gradual speed-up for this video only; press again to resume' },
+  rampPauseFor: { label: 'Pause for', hasValue: true, unit: 'min', title: 'Pause gradual speed-up for this many minutes (all videos and tabs)' },
 };
 
 export const DEFAULT_SPEED_SETTINGS: SpeedSettings = {
@@ -175,9 +181,11 @@ export const DEFAULT_SPEED_SETTINGS: SpeedSettings = {
     { action: 'preferred', code: 'KeyP', value: 16 },
     { action: 'preferred', code: 'KeyU', value: 2.35 },
     { action: 'ramp', code: 'KeyA', value: 0 },
+    { action: 'rampHoldVideo', code: 'KeyQ', value: 0 },
+    { action: 'rampPauseFor', code: 'KeyW', value: 10 },
   ],
   blacklist: '',
-  shortcutsVersion: 2,
+  shortcutsVersion: 3,
   ramp: false,
   rampStep: 0.01,
   rampEverySec: 30,
@@ -202,6 +210,17 @@ export function withSpeedDefaults(partial: Partial<SpeedSettings> | undefined): 
     const aTaken = s.shortcuts.some((x) => x.code === 'KeyA');
     if (!hasRamp && !aTaken) s.shortcuts = [...s.shortcuts, { action: 'ramp', code: 'KeyA', value: 0 }];
     s.shortcutsVersion = 2;
+  }
+  // v3 added Q (stop speed-up for this video) and W (pause it for 10 min).
+  if (partial?.shortcuts && (partial.shortcutsVersion ?? 1) < 3) {
+    const add = (action: SpeedAction, code: string, value: number) => {
+      if (!s.shortcuts.some((x) => x.action === action) && !s.shortcuts.some((x) => x.code === code)) {
+        s.shortcuts = [...s.shortcuts, { action, code, value }];
+      }
+    };
+    add('rampHoldVideo', 'KeyQ', 0);
+    add('rampPauseFor', 'KeyW', 10);
+    s.shortcutsVersion = 3;
   }
   return s;
 }

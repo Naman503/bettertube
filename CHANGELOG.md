@@ -2,6 +2,11 @@
 
 All notable changes to BetterTube. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Stop gradual speed-up for this video** (`Q`, toggle) and **pause it for a set time** (`W`, default 10 min, any duration). Both are in the speed panel and the popup too. A timed pause carries across videos and tabs and ends by itself; any resume key ends it early. Saved shortcut lists get `Q`/`W` once, if those keys are free.
+
 ## [0.4.0] — 2026-10-15
 
 ### Added

@@ -94,6 +94,7 @@ A small overlay sits on every video. Hover it for « − + » ✕, click the num
 | `S` / `D` | Slower / faster by 0.05× | `G` `H` `Y` `P` `U` | Preferred speeds 3.1 · 2.95 · 3.6 · 16 · 2.35 (press again to go back) |
 | `Z` / `X` | Back / forward 10 s | `R` | Reset to 1× (press again to go back) |
 | `V` | Show / hide the overlay | `A` | Gradual speed-up on / off |
+| `Q` | Stop speed-up for this video (press again to resume) | `W` | Pause speed-up for 10 min (any duration) |
 
 Every key, value and action is editable in **Popup → Speed → Shortcuts**.
 
@@ -114,6 +115,7 @@ The speed climbs while you watch, measured in real playback time, so pauses and 
 - **You stay in control:**
   - **Pause and resume by key:** each shortcut can pause or resume the climb. `R` pauses; `D` and the preferred speeds resume. A pause lasts across videos until you resume.
   - **Quiet zone:** no climbing between two speeds you choose, e.g. 1–2× while listening to music.
+  - **Stop or pause on demand:** `Q` stops the climb for the current video only; `W` pauses it everywhere for a set time and it resumes by itself. Both are also in the speed panel (5 / 10 / 30 / 60 min) and the popup.
   - **Rewinding** eases the speed down 0.05× and pauses the climb for a minute.
   - **Short videos** under 2 minutes, which covers most clips and ads, are skipped.
 

@@ -11,6 +11,7 @@ import {
   keyLabel,
   rampEffectOf,
   RAMP_PAUSED_KEY,
+  RAMP_PAUSED_UNTIL_KEY,
   SITE_SPEEDS_KEY,
   rampMinutesToMax,
   withSpeedDefaults,
@@ -595,6 +596,7 @@ function renderRamp() {
       switchControl('Ease on rewind', speed.rampEaseOnRewind, (v) => save({ rampEaseOnRewind: v })),
     ),
     quietZoneRow(save),
+    pauseForRow(),
     stackedRow(
       'Skip videos shorter than',
       'Clips and most ads stay at your speed. 0 ramps everything.',
@@ -682,19 +684,62 @@ function quietZoneRow(save: (patch: Partial<SpeedSettings>) => void) {
 /** "Paused by R: press G, H, D to resume" with a Resume button, when paused. */
 async function renderRampPaused() {
   const box = $('ramp-paused');
-  const paused = (await chrome.storage.local.get(RAMP_PAUSED_KEY))[RAMP_PAUSED_KEY] === true;
-  box.hidden = !(paused && speed.ramp);
+  const local = await chrome.storage.local.get([RAMP_PAUSED_KEY, RAMP_PAUSED_UNTIL_KEY]);
+  const paused = local[RAMP_PAUSED_KEY] === true;
+  const until = (local[RAMP_PAUSED_UNTIL_KEY] as number | undefined) ?? 0;
+  const timed = until > Date.now();
+  box.hidden = !((paused || timed) && speed.ramp);
   if (box.hidden) return;
   const keys = speed.shortcuts.filter((x) => x.code && rampEffectOf(x) === 'resume').map((x) => keyLabel(x.code));
   const resume = el('button', { className: 'btn small' }, 'Resume');
   resume.addEventListener('click', async () => {
-    await chrome.storage.local.set({ [RAMP_PAUSED_KEY]: false });
+    await chrome.storage.local.set({ [RAMP_PAUSED_KEY]: false, [RAMP_PAUSED_UNTIL_KEY]: 0 });
     void renderRampPaused();
   });
+  const what = timed && !paused
+    ? `Paused until ${new Date(until).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`
+    : 'Paused';
   box.replaceChildren(
-    el('span', {}, el('b', {}, 'Paused'), keys.length ? ` · press ${keys.join(', ')} on a video to resume` : ''),
+    el('span', {}, el('b', {}, what), keys.length ? ` · press ${keys.join(', ')} on a video to resume` : ''),
     resume,
   );
+}
+
+function pauseHint() {
+  const key = (action: SpeedAction) => {
+    const sc = speed.shortcuts.find((x) => x.action === action && x.code);
+    return sc ? keyLabel(sc.code) : null;
+  };
+  const w = key('rampPauseFor');
+  const q = key('rampHoldVideo');
+  return [
+    'All videos and tabs; it resumes by itself.',
+    w ? `On a video, ${w} pauses for the time set in Shortcuts.` : '',
+    `To stop it for just the current video, ${q ? `press ${q}` : 'use the speed panel'}.`,
+  ].filter(Boolean).join(' ');
+}
+
+/** "Pause speed-up for 5m · 10m · 30m · 1h · 2h" quick buttons. */
+function pauseForRow() {
+  const chips = el(
+    'div',
+    { className: 'amount-chips' },
+    ...([[5, '5 min'], [10, '10 min'], [30, '30 min'], [60, '1 h'], [120, '2 h']] as [number, string][]).map(([mins, label]) => {
+      const c = el('button', { className: 'chip' }, label);
+      c.addEventListener('click', async () => {
+        await chrome.storage.local.set({ [RAMP_PAUSED_UNTIL_KEY]: Date.now() + mins * 60_000 });
+        void renderRampPaused();
+      });
+      return c;
+    }),
+  );
+  const text = el(
+    'div',
+    { className: 'text' },
+    'Pause speed-up for…',
+    el('p', { className: 'hint' }, pauseHint()),
+  );
+  return el('div', { className: 'row column' }, text, chips);
 }
 
 function keyFor(action: SpeedAction) {
@@ -787,7 +832,7 @@ function renderShortcuts() {
       ] as [RampEffect, string][]) {
         effect.append(el('option', { value, selected: value === current }, label));
       }
-      effect.disabled = s.action === 'ramp';
+      effect.disabled = s.action === 'ramp' || s.action === 'rampHoldVideo' || s.action === 'rampPauseFor';
       effect.addEventListener('change', () => update(i, { ramp: effect.value as RampEffect }));
 
       const del = el('button', { className: 'del', title: 'Remove' }, '✕');

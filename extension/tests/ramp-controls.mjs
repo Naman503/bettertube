@@ -120,6 +120,58 @@ try {
   await press('a'); // off
   await press('a'); // on again: clears the pause
   check('turning speed-up off and on clears the pause', !(await paused()), `paused=${await paused()}`);
+
+  // ---- Q: stop for this video · W: pause for a while ----
+  await setSpeed({
+    rampQuiet: false,
+    shortcutsVersion: 3,
+    shortcuts: [
+      { action: 'faster', code: 'KeyD', value: 0.05 },
+      { action: 'reset', code: 'KeyR', value: 1 },
+      { action: 'preferred', code: 'KeyG', value: 3.1 },
+      { action: 'preferred', code: 'KeyH', value: 2.95 },
+      { action: 'ramp', code: 'KeyA', value: 0 },
+      { action: 'rampHoldVideo', code: 'KeyQ', value: 0 },
+      { action: 'rampPauseFor', code: 'KeyW', value: 0.1 }, // 6 s, for the test
+    ],
+  });
+  await page.close();
+  await open('/three');
+  await press('h'); // 2.95, climbing
+  await press('q');
+  const held = await rate();
+  check('Q shows "stopped for this video"', /stopped for this video/i.test((await label()) ?? ''), `overlay "${await label()}"`);
+  await watch(6);
+  check('Q: no climb on this video', (await rate()) === held, `${held}× → ${await rate()}×`);
+  await press('q');
+  await watch(5);
+  check('Q again: climbing resumes', (await rate()) > held, `${held}× → ${await rate()}×`);
+  await press('q'); // stop again, then check the next video isn't affected
+  await page.close();
+  await open('/four');
+  const next = await rate();
+  await watch(5);
+  check('Q only affects that video: the next one climbs', (await rate()) > next, `${next}× → ${await rate()}×`);
+
+  await press('w'); // pause 6 s, everywhere
+  const pausedAt = await rate();
+  check('W shows "paused for…"', /paused for/i.test((await label()) ?? ''), `overlay "${await label()}"`);
+  await page.close();
+  await open('/five');
+  await watch(3);
+  check('W pause carries to another video', (await rate()) === pausedAt, `${pausedAt}× → ${await rate()}×`);
+  await page.waitForTimeout(4000); // the 6 s pause runs out
+  const after = await rate();
+  await watch(5);
+  check('W pause ends by itself and the climb resumes', (await rate()) > after, `${after}× → ${await rate()}×`);
+  await setSpeed({ shortcuts: [
+    { action: 'preferred', code: 'KeyH', value: 2.95 },
+    { action: 'rampPauseFor', code: 'KeyW', value: 10 },
+  ] });
+  await press('w'); // 10 min
+  await press('h'); // resume key ends it early
+  await watch(5);
+  check('a resume key (H) ends a timed pause early', (await rate()) > 2.95, `${await rate()}×`);
 } finally {
   await context.close();
 }

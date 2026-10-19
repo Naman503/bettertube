@@ -22,6 +22,7 @@ import {
   keyLabel,
   rampEffectOf,
   RAMP_PAUSED_KEY,
+  RAMP_PAUSED_UNTIL_KEY,
   rampMinutesToMax,
   withSpeedDefaults,
   type RampEffect,
@@ -193,6 +194,8 @@ function userSetRate(m: HTMLMediaElement, rate: number) {
 let rampTimer: ReturnType<typeof setInterval> | undefined;
 let rampAcc = 0; // seconds of playback since the last step
 let rampPausedUntil = 0;
+/** "Pause for N min": until this time (shared by all tabs, survives videos). */
+let rampTimedUntil = 0;
 let rampNote = '';
 const rampHeld = new WeakSet<HTMLMediaElement>();
 const rampLastPos = new WeakMap<HTMLMediaElement, number>();
@@ -231,13 +234,46 @@ function applyRampEffect(effect: RampEffect, m: HTMLMediaElement): string | null
     setRampPaused(true);
     return 'Speed-up paused';
   }
-  const wasStopped = rampPaused || rampHeld.has(m);
+  const wasStopped = rampPaused || rampHeld.has(m) || Date.now() < rampTimedUntil;
   setRampPaused(false);
   rampHeld.delete(m);
   rampPausedUntil = 0;
+  if (rampTimedUntil) setTimedPause(0);
   startRamp();
   return wasStopped ? 'Speed-up on' : null;
 }
+
+function setTimedPause(until: number) {
+  rampTimedUntil = until;
+  rampAcc = 0;
+  try {
+    void chrome.storage.local.set({ [RAMP_PAUSED_UNTIL_KEY]: until });
+  } catch {
+    // extension reloaded
+  }
+  for (const x of recent) stateOf(x).controller?.update();
+}
+
+/** Stop gradual speed-up for this video only (toggle). Returns a label to show. */
+function toggleHoldVideo(m: HTMLMediaElement): string {
+  if (rampHeld.has(m)) {
+    rampHeld.delete(m);
+    rampAcc = 0;
+    startRamp();
+    return 'Speed-up resumed';
+  }
+  rampHeld.add(m);
+  return 'Speed-up stopped for this video';
+}
+
+/** Pause gradual speed-up everywhere for `minutes`. Returns a label to show. */
+function pauseFor(minutes: number): string {
+  const mins = minutes > 0 ? minutes : 10;
+  setTimedPause(Date.now() + mins * 60_000);
+  return `Speed-up paused for ${fmtInterval(mins * 60)}`;
+}
+
+const minutesLeft = () => Math.max(1, Math.ceil((rampTimedUntil - Date.now()) / 60_000));
 
 function onManualChange(m: HTMLMediaElement) {
   rampAcc = 0;
@@ -252,7 +288,11 @@ function rampStatus(m: HTMLMediaElement): string {
     const keys = resumeKeys();
     return `Paused${keys ? `: press ${keys} to resume` : ''}`;
   }
-  if (rampHeld.has(m)) return 'Paused for this video (you changed the speed)';
+  if (Date.now() < rampTimedUntil) return `Paused for ${minutesLeft()} more min`;
+  if (rampHeld.has(m)) {
+    const key = settings.shortcuts.find((x) => x.action === 'rampHoldVideo' && x.code);
+    return `Stopped for this video${key ? `: press ${keyLabel(key.code)} to resume` : ''}`;
+  }
   if (inQuietZone(m.playbackRate, settings)) {
     return `Waiting: no speed-up between ${fmt(settings.rampQuietFrom)}× and ${fmt(settings.rampQuietTo)}×`;
   }
@@ -285,7 +325,7 @@ function rampTick() {
     stateOf(m).controller?.update();
     return;
   }
-  if (rampPaused || rampHeld.has(m) || tooShort(m) || Date.now() < rampPausedUntil) return;
+  if (rampPaused || rampHeld.has(m) || tooShort(m) || Date.now() < rampPausedUntil || Date.now() < rampTimedUntil) return;
   // Quiet zone (e.g. music between 1× and 2×): wait, and start fresh once you leave it.
   if (inQuietZone(m.playbackRate, settings)) {
     rampAcc = 0;
@@ -439,7 +479,15 @@ function run(action: SpeedAction, m: HTMLMediaElement, value: number) {
       setRampPaused(false);
       void saveSpeedSettings({ ramp: on });
       if (on) startRamp();
+      if (rampTimedUntil) setTimedPause(0);
       s.controller?.flashLabel(on ? 'Speed-up on' : 'Speed-up off');
+      return;
+    }
+    case 'rampHoldVideo':
+    case 'rampPauseFor': {
+      const label = action === 'rampHoldVideo' ? toggleHoldVideo(m) : pauseFor(value);
+      if (s.controller) s.controller.flashLabel(label);
+      else cornerBadge(label);
       return;
     }
   }
@@ -493,7 +541,7 @@ function runShortcut(sc: Shortcut, m: HTMLMediaElement) {
     if (label) stateOf(m).controller?.flashLabel(label);
   }
   // Audio (and tiny videos) have no overlay: show the result in a corner badge.
-  if (!stateOf(m).controller && sc.action !== 'display') {
+  if (!stateOf(m).controller && !['display', 'rampHoldVideo', 'rampPauseFor'].includes(sc.action)) {
     const what = sc.action === 'ramp' ? (settings.ramp ? 'Speed-up on' : 'Speed-up off') : `${fmtRateDisplay(m.playbackRate, settings.speedDecimals)}×`;
     cornerBadge(label ? `${what} · ${label}` : what);
   }
@@ -614,6 +662,10 @@ button:focus-visible { outline: 2px solid #3ea6ff; outline-offset: 1px; }
 .ramp { display: grid; gap: 4px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.12); }
 .ramp-head { display: flex; align-items: center; justify-content: space-between; }
 .ramp-title { font-weight: 600; }
+.ramp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 2px; }
+.ramp-actions .chip { padding: 0 9px; min-width: 0; font-size: 12px; }
+.ramp-actions .chip.wide { flex-basis: 100%; }
+.ramp-pause-label { color: rgba(255,255,255,.6); font-size: 11px; font-weight: 400; margin: 0 2px 0 0; }
 .switch { position: relative; width: 32px; min-width: 32px; height: 18px; padding: 0; border-radius: 999px; background: rgba(255,255,255,.25); }
 .switch:hover { background: rgba(255,255,255,.35); }
 .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; }
@@ -869,8 +921,25 @@ class Controller {
     const rampHead = h('div', 'ramp-head');
     rampHead.append(h('span', 'ramp-title', `Gradual speed-up${rampKey?.code ? ` (${keyLabel(rampKey.code)})` : ''}`), rampToggle);
     const rampText = h('div', 'hint');
+    // Stop for this video, or pause for a while.
+    const holdKey = settings.shortcuts.find((x) => x.action === 'rampHoldVideo' && x.code);
+    const hold = h('button', 'chip wide', `Stop for this video${holdKey ? ` (${keyLabel(holdKey.code)})` : ''}`);
+    hold.addEventListener('click', () => {
+      run('rampHoldVideo', this.media, 0);
+      this.update();
+    });
+    const pauseRow = h('div', 'ramp-actions');
+    pauseRow.append(hold, h('span', 'ramp-pause-label', 'Pause for'));
+    for (const mins of [5, 10, 30, 60]) {
+      const c = h('button', 'chip', mins < 60 ? `${mins}m` : '1h');
+      c.addEventListener('click', () => {
+        run('rampPauseFor', this.media, mins);
+        this.update();
+      });
+      pauseRow.append(c);
+    }
     const ramp = h('div', 'ramp');
-    ramp.append(rampHead, rampText);
+    ramp.append(rampHead, rampText, pauseRow);
 
     panel.append(row, chipsWrap, warn, ramp, hint);
     this.ctl.append(panel);
@@ -917,11 +986,12 @@ async function start() {
 
   const [sync, local] = await Promise.all([
     chrome.storage.sync.get(SPEED_KEY),
-    chrome.storage.local.get([LAST_SPEED_KEY, RAMP_PAUSED_KEY, SITE_SPEEDS_KEY]),
+    chrome.storage.local.get([LAST_SPEED_KEY, RAMP_PAUSED_KEY, SITE_SPEEDS_KEY, RAMP_PAUSED_UNTIL_KEY]),
   ]);
   lastSpeed = (local[LAST_SPEED_KEY] as number | undefined) ?? 1;
   siteSpeeds = (local[SITE_SPEEDS_KEY] as Record<string, number> | undefined) ?? {};
   rampPaused = local[RAMP_PAUSED_KEY] === true;
+  rampTimedUntil = (local[RAMP_PAUSED_UNTIL_KEY] as number | undefined) ?? 0;
   applySettings(withSpeedDefaults(sync[SPEED_KEY] as Partial<SpeedSettings> | undefined));
   ready = true;
 
@@ -941,6 +1011,10 @@ async function start() {
     if (area === 'local' && changes[LAST_SPEED_KEY]) lastSpeed = (changes[LAST_SPEED_KEY].newValue as number) ?? 1;
     if (area === 'local' && changes[SITE_SPEEDS_KEY]) {
       siteSpeeds = (changes[SITE_SPEEDS_KEY].newValue as Record<string, number> | undefined) ?? {};
+    }
+    if (area === 'local' && changes[RAMP_PAUSED_UNTIL_KEY]) {
+      rampTimedUntil = (changes[RAMP_PAUSED_UNTIL_KEY].newValue as number | undefined) ?? 0;
+      for (const x of recent) stateOf(x).controller?.update();
     }
     if (area === 'local' && changes[RAMP_PAUSED_KEY]) {
       rampPaused = changes[RAMP_PAUSED_KEY].newValue === true;
