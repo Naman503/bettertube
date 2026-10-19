@@ -136,6 +136,13 @@ function showReloadAlert() {
 async function checkActiveTab() {
   const status = $('tab-status');
   const tab = activeTab;
+  if (tab?.incognito) {
+    showAlert(
+      'alert-incognito',
+      'Incognito: nothing is recorded',
+      'BetterTube works as usual here, but saves no watch stats. Site speeds you set last only until you close your incognito tabs.',
+    );
+  }
   if (!tab?.id || !tab.url?.startsWith('http')) return;
 
   if (tab.url.startsWith('https://www.youtube.com/')) {

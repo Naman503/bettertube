@@ -1,6 +1,7 @@
 // Isolated-world entry. Runs at document_start on www.youtube.com.
 import { onIsolatedMessage, sendToMain } from '../shared/bridge';
 import { MIRROR_KEY, readMirror, STORAGE_KEY, withDefaults, type Settings } from '../shared/settings';
+import { isIncognito } from '../shared/privacy';
 import { collectDiagnostics, saveAutoSnapshot } from './diagnostics';
 import { toast } from './dom';
 import { classicLayout } from './modules/classicLayout';
@@ -26,7 +27,7 @@ function readPage(): PageInfo {
 }
 
 // Start from the mirrored copy so CSS applies before the first paint.
-const ctx: Ctx = { settings: readMirror(), page: readPage(), video: null };
+const ctx: Ctx = { settings: readMirror(), page: readPage(), video: null, incognito: false };
 
 function each(fn: (m: Module) => void) {
   for (const m of modules) {
@@ -95,6 +96,7 @@ function checkNavigation() {
 
 async function start() {
   applyStyles();
+  ctx.incognito = await isIncognito();
   ctx.settings = withDefaults((await chrome.storage.sync.get(STORAGE_KEY))[STORAGE_KEY] as Partial<Settings> | undefined);
   applyStyles();
   publishSettings();

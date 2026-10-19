@@ -61,7 +61,7 @@ function onMediaEvent(e: Event) {
 }
 
 function tick() {
-  if (!ctxRef.settings.statsEnabled || !alive()) return;
+  if (!ctxRef.settings.statsEnabled || !alive() || ctxRef.incognito) return; // incognito: not recorded
   const now = Date.now();
   const video = ctxRef.page.isWatch ? mainVideo() : null;
   const adPlaying = !!video && !video.paused && isAd();
@@ -216,6 +216,19 @@ function cardRow(label: string, value: string) {
 
 async function renderBadge() {
   if (!badge || !alive()) return;
+  if (ctxRef.incognito) {
+    badgeParts.videos.textContent = 'Incognito';
+    badgeParts.time.textContent = 'not recorded';
+    badge.dataset.level = 'none';
+    const title = document.createElement('div');
+    title.className = 'bt-card-title';
+    title.textContent = 'Incognito: nothing is recorded';
+    const body = document.createElement('div');
+    body.className = 'bt-card-hint';
+    body.textContent = 'No watch stats are saved here. Site speeds last until you close your incognito tabs.';
+    badgeParts.card.replaceChildren(title, body);
+    return;
+  }
   const key = DAY_PREFIX + dayKey();
   let day: DayStats | undefined;
   try {

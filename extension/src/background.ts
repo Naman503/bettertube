@@ -1,5 +1,6 @@
 // Service worker: merges stats ticks from every YouTube tab into the day's
 // record, and opens the dashboard.
+import { INCOGNITO_PREFIX, SIMULATE_INCOGNITO_KEY } from './shared/privacy';
 import { DAY_PREFIX, RETENTION_DAYS, SESSION_GAP_MS, dayKey, emptyDay, type DayStats, type Tick } from './shared/stats';
 
 const STATE_KEY = 'stats:state';
@@ -148,8 +149,30 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => serially(() => setMediaFrames(tabId, [])));
 
-chrome.runtime.onMessage.addListener((msg) => {
+// ---------- incognito: remember nothing past the session ----------
+// The speed controller keeps incognito speeds and pause states in
+// chrome.storage.session (memory only) under "incognito:" keys; content scripts
+// need access to that area. When the last incognito tab closes, wipe them.
+void chrome.storage.session.setAccessLevel?.({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' });
+
+async function forgetIncognito() {
+  const all = await chrome.storage.session.get(null);
+  const keys = Object.keys(all).filter((k) => k.startsWith(INCOGNITO_PREFIX));
+  if (keys.length) await chrome.storage.session.remove(keys);
+}
+
+chrome.tabs.onRemoved.addListener(async () => {
+  // Simulated incognito (tests) has no real incognito tabs to count.
+  if ((await chrome.storage.local.get(SIMULATE_INCOGNITO_KEY))[SIMULATE_INCOGNITO_KEY] === true) return;
+  const tabs = await chrome.tabs.query({});
+  if (!tabs.some((t) => t.incognito)) await forgetIncognito();
+});
+// Tests can't open real incognito tabs; unpacked builds expose the wipe.
+if (!('update_url' in chrome.runtime.getManifest())) (globalThis as Record<string, unknown>).btForgetIncognito = forgetIncognito;
+
+chrome.runtime.onMessage.addListener((msg, sender) => {
   if (msg?.type === 'stats:tick') {
+    if (sender.tab?.incognito) return; // never record incognito watching
     queue = queue.then(() => record(msg as Tick)).catch((err) => console.error('[BetterTube] stats', err));
   } else if (msg?.type === 'open-dashboard') {
     void chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });

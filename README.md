@@ -142,6 +142,7 @@ BetterTube has **no servers, accounts or analytics**.
 
 - **Where data lives:** settings are in `chrome.storage.sync`; stats and site speeds are in `chrome.storage.local`. Nothing leaves your browser.
 - **Retention:** stats are kept for 400 days and can be exported or cleared from the dashboard.
+- **Incognito:** everything works the same, but nothing is recorded. No watch stats, no diagnostics snapshot, and your normal site speeds and pause state are left alone. Speeds you set in incognito start from your normal ones, are kept in memory only (`chrome.storage.session`), and are forgotten when you close your last incognito tab. To use it, turn on **Allow in Incognito** in `brave://extensions` (or `chrome://extensions`) → BetterTube → Details.
 - **Permissions:**
 
 | Permission | Why |
@@ -204,6 +205,7 @@ More end-to-end suites (Playwright, local test media generated with ffmpeg):
 | `tests/stats-ramp.mjs`, `tests/stats-seek.mjs` | Saved-by-speed vs ground truth; jumps not counted |
 | `tests/user-layout-sim.mjs` | Recreates the signed-in 2026 side-rail layout via its flags and checks the fix |
 | `tests/popup-amounts.mjs` | Free-entry fields in the popup |
+| `tests/incognito.mjs` | Incognito: no stats, separate session-only speeds, wiped on close (uses an unpacked-only simulation flag) |
 
 Set `CHROMIUM_PATH` to reuse an already-downloaded Chromium.
 

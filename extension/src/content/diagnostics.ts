@@ -15,7 +15,7 @@ const LAYOUT_FLAGS = /watch|theat|secondary|sidebar|side_menu|grid|panel|column|
  * about your account.
  */
 export async function saveAutoSnapshot(ctx: Ctx, modules: Module[], label: string) {
-  if (!ctx.page.isWatch || !alive()) return;
+  if (!ctx.page.isWatch || !alive() || ctx.incognito) return; // nothing recorded in incognito
   try {
     await writeSnapshot(ctx, modules, label);
   } catch {

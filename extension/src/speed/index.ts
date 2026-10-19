@@ -30,6 +30,7 @@ import {
   type SpeedAction,
   type SpeedSettings,
 } from '../shared/speedSettings';
+import { INCOGNITO_PREFIX, isIncognito } from '../shared/privacy';
 
 let settings: SpeedSettings = withSpeedDefaults(undefined);
 let shortcuts = new Map<string, Shortcut>();
@@ -37,6 +38,15 @@ let shortcuts = new Map<string, Shortcut>();
 let lastSpeed = 1;
 /** Last speed per site, e.g. { "youtube.com": 3.1, "udemy.com": 1.75 }. */
 let siteSpeeds: Record<string, number> = {};
+
+// Incognito: our own speeds and pause states live in session memory under
+// "incognito:" keys (wiped when the last incognito tab closes); your normal
+// saved speeds are read as a starting point but never written.
+let INCOGNITO = false;
+let normalSiteSpeeds: Record<string, number> = {};
+const privateArea = () => (INCOGNITO ? chrome.storage.session : chrome.storage.local);
+const privateAreaName = () => (INCOGNITO ? 'session' : 'local');
+const pk = (key: string) => (INCOGNITO ? INCOGNITO_PREFIX + key : key);
 
 /**
  * The site a video "belongs to" is the page you're on: a YouTube embed inside
@@ -56,7 +66,8 @@ const site = pageSite();
 
 /** The speed new videos here should start at. */
 function targetSpeed() {
-  return settings.perSiteSpeed ? (siteSpeeds[site] ?? lastSpeed) : lastSpeed;
+  if (!settings.perSiteSpeed) return lastSpeed;
+  return siteSpeeds[site] ?? (INCOGNITO ? normalSiteSpeeds[site] : undefined) ?? lastSpeed;
 }
 let active = false; // enabled and not blacklisted
 let ready = false;
@@ -166,13 +177,13 @@ function rememberSpeed(rate: number) {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     try {
-      const patch: Record<string, unknown> = { [LAST_SPEED_KEY]: rate };
+      const patch: Record<string, unknown> = { [pk(LAST_SPEED_KEY)]: rate };
       if (settings.perSiteSpeed) {
         // Merge with what other tabs saved for other sites meanwhile.
-        const stored = ((await chrome.storage.local.get(SITE_SPEEDS_KEY))[SITE_SPEEDS_KEY] ?? {}) as Record<string, number>;
-        patch[SITE_SPEEDS_KEY] = { ...stored, [site]: rate };
+        const stored = ((await privateArea().get(pk(SITE_SPEEDS_KEY)))[pk(SITE_SPEEDS_KEY)] ?? {}) as Record<string, number>;
+        patch[pk(SITE_SPEEDS_KEY)] = { ...stored, [site]: rate };
       }
-      await chrome.storage.local.set(patch);
+      await privateArea().set(patch);
     } catch {
       // extension reloaded
     }
@@ -212,7 +223,7 @@ function setRampPaused(paused: boolean) {
   rampPaused = paused;
   rampAcc = 0;
   try {
-    void chrome.storage.local.set({ [RAMP_PAUSED_KEY]: paused });
+    void privateArea().set({ [pk(RAMP_PAUSED_KEY)]: paused });
   } catch {
     // extension reloaded
   }
@@ -247,7 +258,7 @@ function setTimedPause(until: number) {
   rampTimedUntil = until;
   rampAcc = 0;
   try {
-    void chrome.storage.local.set({ [RAMP_PAUSED_UNTIL_KEY]: until });
+    void privateArea().set({ [pk(RAMP_PAUSED_UNTIL_KEY)]: until });
   } catch {
     // extension reloaded
   }
@@ -984,14 +995,19 @@ async function start() {
   void joinFrameRelay();
   window.addEventListener('keydown', onKey, true);
 
-  const [sync, local] = await Promise.all([
+  INCOGNITO = await isIncognito();
+  const keys = [LAST_SPEED_KEY, RAMP_PAUSED_KEY, SITE_SPEEDS_KEY, RAMP_PAUSED_UNTIL_KEY];
+  const [sync, local, own] = await Promise.all([
     chrome.storage.sync.get(SPEED_KEY),
-    chrome.storage.local.get([LAST_SPEED_KEY, RAMP_PAUSED_KEY, SITE_SPEEDS_KEY, RAMP_PAUSED_UNTIL_KEY]),
+    chrome.storage.local.get(keys),
+    privateArea().get(keys.map(pk)),
   ]);
-  lastSpeed = (local[LAST_SPEED_KEY] as number | undefined) ?? 1;
-  siteSpeeds = (local[SITE_SPEEDS_KEY] as Record<string, number> | undefined) ?? {};
-  rampPaused = local[RAMP_PAUSED_KEY] === true;
-  rampTimedUntil = (local[RAMP_PAUSED_UNTIL_KEY] as number | undefined) ?? 0;
+  if (INCOGNITO) normalSiteSpeeds = (local[SITE_SPEEDS_KEY] as Record<string, number> | undefined) ?? {};
+  // In incognito, a fresh session starts from your normal last speed.
+  lastSpeed = (own[pk(LAST_SPEED_KEY)] as number | undefined) ?? (local[LAST_SPEED_KEY] as number | undefined) ?? 1;
+  siteSpeeds = (own[pk(SITE_SPEEDS_KEY)] as Record<string, number> | undefined) ?? {};
+  rampPaused = own[pk(RAMP_PAUSED_KEY)] === true;
+  rampTimedUntil = (own[pk(RAMP_PAUSED_UNTIL_KEY)] as number | undefined) ?? 0;
   applySettings(withSpeedDefaults(sync[SPEED_KEY] as Partial<SpeedSettings> | undefined));
   ready = true;
 
@@ -1008,16 +1024,19 @@ async function start() {
     if (area === 'sync' && changes[SPEED_KEY]) {
       applySettings(withSpeedDefaults(changes[SPEED_KEY].newValue as Partial<SpeedSettings> | undefined));
     }
-    if (area === 'local' && changes[LAST_SPEED_KEY]) lastSpeed = (changes[LAST_SPEED_KEY].newValue as number) ?? 1;
-    if (area === 'local' && changes[SITE_SPEEDS_KEY]) {
-      siteSpeeds = (changes[SITE_SPEEDS_KEY].newValue as Record<string, number> | undefined) ?? {};
+    if (INCOGNITO && area === 'local' && changes[SITE_SPEEDS_KEY]) {
+      normalSiteSpeeds = (changes[SITE_SPEEDS_KEY].newValue as Record<string, number> | undefined) ?? {};
     }
-    if (area === 'local' && changes[RAMP_PAUSED_UNTIL_KEY]) {
-      rampTimedUntil = (changes[RAMP_PAUSED_UNTIL_KEY].newValue as number | undefined) ?? 0;
+    if (area !== privateAreaName()) return;
+    const changed = (key: string) => changes[pk(key)];
+    if (changed(LAST_SPEED_KEY)?.newValue !== undefined) lastSpeed = changed(LAST_SPEED_KEY).newValue as number;
+    if (changed(SITE_SPEEDS_KEY)) siteSpeeds = (changed(SITE_SPEEDS_KEY).newValue as Record<string, number> | undefined) ?? {};
+    if (changed(RAMP_PAUSED_UNTIL_KEY)) {
+      rampTimedUntil = (changed(RAMP_PAUSED_UNTIL_KEY).newValue as number | undefined) ?? 0;
       for (const x of recent) stateOf(x).controller?.update();
     }
-    if (area === 'local' && changes[RAMP_PAUSED_KEY]) {
-      rampPaused = changes[RAMP_PAUSED_KEY].newValue === true;
+    if (changed(RAMP_PAUSED_KEY)) {
+      rampPaused = changed(RAMP_PAUSED_KEY).newValue === true;
       for (const x of recent) stateOf(x).controller?.update();
     }
   });
@@ -1035,6 +1054,7 @@ async function start() {
         rate: m?.playbackRate ?? null,
         site,
         siteSpeed: siteSpeeds[site] ?? null,
+        incognito: INCOGNITO,
         perSite: settings.perSiteSpeed,
       });
     });

@@ -13,6 +13,8 @@ export interface Ctx {
   page: PageInfo;
   /** Current video as reported by the MAIN-world player bridge. */
   video: VideoInfo | null;
+  /** Incognito window: work as usual, record nothing. */
+  incognito: boolean;
 }
 
 export interface Check {
