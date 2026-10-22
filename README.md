@@ -150,7 +150,7 @@ BetterTube has **no servers, accounts or analytics**.
 | `storage` | Settings, stats, site speeds |
 | `alarms` | Development builds check for a rebuild every 30 s |
 | `youtube.com` | The YouTube fixes and stats |
-| All sites (content script only) | The speed controller, which works on any site with video or audio |
+| All sites (content script only) | The speed controller, which works on any site with video or audio (except Netflix) |
 
 ## Troubleshooting
 
@@ -167,6 +167,12 @@ YouTube runs A/B tests per account. Open a video, then open the popup → **Heal
 - **Off list:** check the site isn't in **Popup → Speed → Turned off on these sites**.
 - **Two controllers:** the popup warns if Video Speed Controller is still running.
 - **Not covered:** sound generated with the Web Audio API (no media element, e.g. some games) and media inside *closed* shadow roots.
+</details>
+
+<details>
+<summary><b>Netflix</b></summary>
+
+BetterTube doesn't run on Netflix at all. Its player went black with the speed controller attached, so Netflix keeps its own controls (speed up to 1.5×).
 </details>
 
 <details>
@@ -205,6 +211,7 @@ More end-to-end suites (Playwright, local test media generated with ffmpeg):
 | `tests/stats-ramp.mjs`, `tests/stats-seek.mjs` | Saved-by-speed vs ground truth; jumps not counted |
 | `tests/user-layout-sim.mjs` | Recreates the signed-in 2026 side-rail layout via its flags and checks the fix |
 | `tests/popup-amounts.mjs` | Free-entry fields in the popup |
+| `tests/netflix.mjs` | Netflix left alone; videos played before being attached stay in their player |
 | `tests/incognito.mjs` | Incognito: no stats, separate session-only speeds, wiped on close (uses an unpacked-only simulation flag) |
 
 Set `CHROMIUM_PATH` to reuse an already-downloaded Chromium.

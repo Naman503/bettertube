@@ -4,8 +4,9 @@
 // (`new Audio(url).play()`, common in podcast and music players), and media
 // inside a web component's shadow DOM (their events don't cross the shadow
 // boundary). Seeing every play() call fixes both:
-//  - off-page media are parked in a hidden <bt-media-holder>, so their events
-//    reach the document like any other;
+//  - off-page audio is parked in a hidden <bt-media-holder>, so its events
+//    reach the document like any other (never video: a player may play a
+//    video before attaching it, and moving it would leave a black screen);
 //  - shadow-DOM media announce themselves with a composed "bt-media" event.
 const proto = HTMLMediaElement.prototype;
 const originalPlay = proto.play;
@@ -13,7 +14,7 @@ let holder: HTMLElement | null = null;
 
 proto.play = function (this: HTMLMediaElement, ...args: []) {
   try {
-    if (!this.isConnected) {
+    if (!this.isConnected && this instanceof HTMLAudioElement) {
       if (!holder) {
         holder = document.createElement('bt-media-holder');
         holder.hidden = true;

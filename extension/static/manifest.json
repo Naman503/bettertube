@@ -60,7 +60,10 @@
       "run_at": "document_start",
       "all_frames": true,
       "match_about_blank": true,
-      "world": "MAIN"
+      "world": "MAIN",
+      "exclude_matches": [
+        "*://*.netflix.com/*"
+      ]
     },
     {
       "matches": [
@@ -73,7 +76,10 @@
       ],
       "run_at": "document_start",
       "all_frames": true,
-      "match_about_blank": true
+      "match_about_blank": true,
+      "exclude_matches": [
+        "*://*.netflix.com/*"
+      ]
     }
   ],
   "options_ui": {
