@@ -163,8 +163,11 @@ select {
 .switch input:focus-visible + span { outline: 2px solid var(--link); outline-offset: 2px; }
 
 /* Speed */
-.speed-now { display: flex; align-items: center; justify-content: space-between; }
-.speed-now b { font-size: 22px; font-variant-numeric: tabular-nums; }
+.speed-now-row { display: flex; align-items: center; gap: 12px; }
+.speed-now-site { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.speed-now-site b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.speed-now-rate { font-size: 22px; font-variant-numeric: tabular-nums; }
+.warn-text { color: var(--warn, #d97706); margin: 8px 0 0; }
 .shortcuts { display: grid; gap: 6px; }
 .sc { display: grid; grid-template-columns: 1fr 64px 70px 24px; gap: 6px; align-items: center; }
 .sc select { max-width: none; width: 100%; }

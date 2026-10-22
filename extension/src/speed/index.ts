@@ -437,6 +437,16 @@ function onMediaEvent(e: Event) {
 
 // ---------- actions ----------
 
+const IS_NETFLIX = /(^|\.)netflix\.com$/.test(location.hostname);
+
+/** Netflix stops with an error (M7375) when the video's time is set directly;
+ *  seek through its own player instead (speed/main.ts, MAIN world). */
+function seekTo(m: HTMLMediaElement, time: number) {
+  const t = Math.max(0, Math.min(m.duration || Infinity, time));
+  if (IS_NETFLIX) document.dispatchEvent(new CustomEvent('bt-netflix-seek', { detail: JSON.stringify(Math.round(t * 1000)) }));
+  else m.currentTime = t;
+}
+
 function run(action: SpeedAction, m: HTMLMediaElement, value: number) {
   const s = stateOf(m);
   const rate = m.playbackRate;
@@ -449,10 +459,10 @@ function run(action: SpeedAction, m: HTMLMediaElement, value: number) {
       change(rate - value);
       break;
     case 'rewind':
-      m.currentTime = Math.max(0, m.currentTime - value);
+      seekTo(m, m.currentTime - value);
       break;
     case 'advance':
-      m.currentTime = Math.min(m.duration || Infinity, m.currentTime + value);
+      seekTo(m, m.currentTime + value);
       break;
     case 'reset':
     case 'preferred': {
@@ -475,7 +485,7 @@ function run(action: SpeedAction, m: HTMLMediaElement, value: number) {
       s.mark = m.currentTime;
       break;
     case 'jump':
-      if (s.mark !== null) m.currentTime = s.mark;
+      if (s.mark !== null) seekTo(m, s.mark);
       break;
     case 'display':
       hiddenAll = !hiddenAll;
@@ -795,7 +805,8 @@ class Controller {
   }
 
   update() {
-    if (!this.media.isConnected) {
+    // Turned off here: leave nothing on the page.
+    if (!this.media.isConnected || !active) {
       this.host.remove();
       return;
     }
@@ -973,6 +984,8 @@ function applySettings(s: SpeedSettings) {
   settings = s;
   shortcuts = new Map(s.shortcuts.filter((x) => x.code).map((x) => [x.code, x]));
   active = s.enabled && !isBlacklisted(s.blacklist, location.href);
+  // Tell the MAIN-world helper to stand down too.
+  document.documentElement?.toggleAttribute('data-bt-speed-off', !active);
   if (s.ramp && active) startRamp();
   else stopRamp();
   for (const m of recent) stateOf(m).controller?.update();
@@ -1051,6 +1064,8 @@ async function start() {
       reply({
         ready,
         active,
+        enabled: settings.enabled,
+        url: location.href,
         vscDetected: vscPresent(),
         media: recent.filter((x) => x.isConnected).length,
         rate: m?.playbackRate ?? null,

@@ -8,6 +8,8 @@ import {
   fmtInterval,
   fmtRate,
   fmtRateDisplay,
+  isBlacklisted,
+  toggleSiteOff,
   keyLabel,
   rampEffectOf,
   RAMP_PAUSED_KEY,
@@ -143,9 +145,11 @@ async function checkActiveTab() {
       'BetterTube works as usual here, but saves no watch stats. Site speeds you set last only until you close your incognito tabs.',
     );
   }
-  if (!tab?.id || !tab.url?.startsWith('http')) return;
+  if (!tab?.id) return;
 
-  if (tab.url.startsWith('https://www.youtube.com/')) {
+  // Only YouTube's address is visible here (no "tabs" permission); other
+  // sites report their own address in the speed status below.
+  if (tab.url?.startsWith('https://www.youtube.com/')) {
     let ping: { version: string } | null = null;
     try {
       ping = await chrome.tabs.sendMessage(tab.id, { type: 'ping' });
@@ -174,6 +178,8 @@ async function checkActiveTab() {
       vscDetected: boolean;
       rate: number | null;
       active: boolean;
+      enabled: boolean;
+      url: string;
       site: string;
       siteSpeed: number | null;
       perSite: boolean;
@@ -186,21 +192,52 @@ async function checkActiveTab() {
         [['Open extensions', () => void chrome.tabs.create({ url: 'chrome://extensions' })]],
       );
     }
-    if (s?.rate) {
-      const now = $('speed-now');
-      now.hidden = false;
-      const note = !s.active
-        ? 'Controller is off on this site'
-        : s.perSite
-          ? s.siteSpeed !== null
-            ? `Speed on ${s.site} · remembered for this site`
-            : `Speed on ${s.site} · your last speed (nothing saved for this site yet)`
-          : 'Speed on this tab';
-      now.replaceChildren(el('span', { className: 'hint' }, note), el('b', {}, `${fmtRate(s.rate)}×`));
-    }
+    if (s?.url?.startsWith('http')) renderSpeedNow(s, s.url);
   } catch {
     // No content script here (browser pages, or the tab predates the install).
   }
+}
+
+/** Speed tab header: this site's speed, and a switch to turn the controller off here. */
+function renderSpeedNow(
+  s: { active: boolean; enabled: boolean; rate: number | null; site: string; siteSpeed: number | null; perSite: boolean },
+  url: string,
+) {
+  const now = $('speed-now');
+  now.hidden = false;
+  const host = new URL(url).hostname;
+  const blocked = isBlacklisted(speed.blacklist, url);
+  const note = !speed.enabled
+    ? 'The speed controller is off everywhere (Controller → Enabled)'
+    : blocked
+      ? 'Turned off here. BetterTube leaves this site alone; its own player controls work as usual.'
+      : !s.rate
+        ? 'No video or audio playing on this page yet'
+        : s.perSite
+          ? s.siteSpeed !== null
+            ? 'Remembered for this site'
+            : 'Your last speed (nothing saved for this site yet)'
+          : 'Speed on this tab';
+  const toggle = switchControl(`Speed controller on ${host}`, !blocked, (on) => {
+    const next = toggleSiteOff(speed.blacklist, url, host, !on);
+    void saveSpeed({ blacklist: next }).then(() => {
+      ($('blacklist') as HTMLTextAreaElement).value = next;
+      renderSpeedNow({ ...s, active: speed.enabled && !isBlacklisted(next, url) }, url);
+      if (on && isBlacklisted(next, url)) {
+        $('speed-now').append(el('p', { className: 'hint warn-text' }, 'A /pattern/ in "Turned off on these sites" still matches this site. Edit it below.'));
+      }
+    });
+  });
+  if (!speed.enabled) toggle.querySelector('input')!.disabled = true;
+  now.replaceChildren(
+    el(
+      'div',
+      { className: 'speed-now-row' },
+      el('div', { className: 'speed-now-site' }, el('b', {}, host), el('span', { className: 'hint' }, note)),
+      s.rate && s.active ? el('b', { className: 'speed-now-rate' }, `${fmtRate(s.rate)}×`) : '',
+      toggle,
+    ),
+  );
 }
 
 // ---------- Home ----------

@@ -7,10 +7,13 @@ All notable changes to BetterTube. Versions follow [Semantic Versioning](https:/
 ### Added
 - **Stop gradual speed-up for this video** (`Q`, toggle) and **pause it for a set time** (`W`, default 10 min, any duration). Both are in the speed panel and the popup too. A timed pause carries across videos and tabs and ends by itself; any resume key ends it early. Saved shortcut lists get `Q`/`W` once, if those keys are free.
 - **Incognito mode.** Everything works, but nothing is recorded: no watch stats, no diagnostics snapshot, and your normal site speeds and pause state stay untouched. Incognito speeds start from your normal ones, live in memory only, and are forgotten when the last incognito tab closes. The badge and popup say "Incognito · not recorded". This needs **Allow in Incognito** turned on.
+- **Per-site on/off switch** at the top of **Popup → Speed**. A turned-off site is left completely alone (no overlay, no shortcuts, no page hooks).
+- **Netflix support:** jumps (`Z`/`X`, mark/jump) go through Netflix's own player, since setting the time directly makes Netflix stop with an error.
 
 ### Fixed
-- **Netflix showed a black screen.** BetterTube no longer runs on Netflix.
+- **Netflix showed a black screen** (see below: its video was pulled out of the player).
 - **Videos a page plays before attaching them** were pulled into a hidden holder, which could leave the player empty or without the speed overlay. Only off-page audio is held now.
+- **The popup's speed card never appeared on sites other than YouTube** (it needed the tab's address, which only YouTube grants).
 - **On-video messages wrapped one word per line** (e.g. "Speed-up stopped for this video").
 
 ## [0.4.0] — 2026-10-15

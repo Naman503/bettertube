@@ -14,6 +14,8 @@ let holder: HTMLElement | null = null;
 
 proto.play = function (this: HTMLMediaElement, ...args: []) {
   try {
+    // Speed controller turned off on this site.
+    if (document.documentElement?.hasAttribute('data-bt-speed-off')) return originalPlay.apply(this, args);
     if (!this.isConnected && this instanceof HTMLAudioElement) {
       if (!holder) {
         holder = document.createElement('bt-media-holder');
@@ -30,3 +32,19 @@ proto.play = function (this: HTMLMediaElement, ...args: []) {
   }
   return originalPlay.apply(this, args);
 };
+
+// Netflix: seeking by setting currentTime stops playback with an error, so the
+// controller asks for seeks here and they go through Netflix's own player.
+if (/(^|\.)netflix\.com$/.test(location.hostname)) {
+  document.addEventListener('bt-netflix-seek', (e) => {
+    try {
+      const ms = JSON.parse(String((e as CustomEvent).detail)) as number;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const api = (window as any).netflix.appContext.state.playerApp.getAPI().videoPlayer;
+      const player = api.getVideoPlayerBySessionId(api.getAllPlayerSessionIds().find((id: string) => id.startsWith('watch')) ?? api.getAllPlayerSessionIds()[0]);
+      player.seek(ms);
+    } catch {
+      // player API changed or not ready: do nothing rather than break playback
+    }
+  });
+}

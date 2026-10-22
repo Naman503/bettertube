@@ -104,7 +104,9 @@ Every key, value and action is editable in **Popup → Speed → Shortcuts**.
   - media inside web components;
   - players in cross-origin iframes, with keys handed between the page and the frame.
 - **Acts on the right one.** Shortcuts go to what you're watching or hearing; muted previews and background videos are ignored.
-- **Display options:** decimal places (Auto, or 0–3), opacity, start hidden, and a per-site off list. "Always keep my speed" stops sites resetting it.
+- **Turn it off per site:** one switch in **Popup → Speed** turns the controller off on the site you're on (or back on). A turned-off site is left completely alone. The full list, with `/regex/` support, is under **Turned off on these sites**.
+- **Netflix:** works, including jumps (seeks go through Netflix's own player, which errors if the video is moved directly).
+- **Display options:** decimal places (Auto, or 0–3), opacity and start hidden. "Always keep my speed" stops sites resetting it.
 
 ### Gradual speed-up
 
@@ -150,7 +152,7 @@ BetterTube has **no servers, accounts or analytics**.
 | `storage` | Settings, stats, site speeds |
 | `alarms` | Development builds check for a rebuild every 30 s |
 | `youtube.com` | The YouTube fixes and stats |
-| All sites (content script only) | The speed controller, which works on any site with video or audio (except Netflix) |
+| All sites (content script only) | The speed controller, which works on any site with video or audio |
 
 ## Troubleshooting
 
@@ -164,15 +166,9 @@ YouTube runs A/B tests per account. Open a video, then open the popup → **Heal
 <summary><b>Shortcuts do nothing on a site</b></summary>
 
 - **Typing:** make sure no text field has focus; shortcuts are ignored while typing.
-- **Off list:** check the site isn't in **Popup → Speed → Turned off on these sites**.
+- **Turned off:** open the popup on that site → **Speed**; the switch at the top should be on.
 - **Two controllers:** the popup warns if Video Speed Controller is still running.
 - **Not covered:** sound generated with the Web Audio API (no media element, e.g. some games) and media inside *closed* shadow roots.
-</details>
-
-<details>
-<summary><b>Netflix</b></summary>
-
-BetterTube doesn't run on Netflix at all. Its player went black with the speed controller attached, so Netflix keeps its own controls (speed up to 1.5×).
 </details>
 
 <details>
@@ -211,7 +207,7 @@ More end-to-end suites (Playwright, local test media generated with ffmpeg):
 | `tests/stats-ramp.mjs`, `tests/stats-seek.mjs` | Saved-by-speed vs ground truth; jumps not counted |
 | `tests/user-layout-sim.mjs` | Recreates the signed-in 2026 side-rail layout via its flags and checks the fix |
 | `tests/popup-amounts.mjs` | Free-entry fields in the popup |
-| `tests/netflix.mjs` | Netflix left alone; videos played before being attached stay in their player |
+| `tests/netflix.mjs` | Netflix (no black screen, seeks via its player), the per-site off switch, videos played before being attached |
 | `tests/incognito.mjs` | Incognito: no stats, separate session-only speeds, wiped on close (uses an unpacked-only simulation flag) |
 
 Set `CHROMIUM_PATH` to reuse an already-downloaded Chromium.

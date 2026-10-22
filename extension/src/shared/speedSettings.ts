@@ -243,3 +243,11 @@ export function isBlacklisted(blacklist: string, url: string) {
       }
     });
 }
+
+/** Off-list after turning the controller off/on for one site from the popup. */
+export function toggleSiteOff(blacklist: string, url: string, host: string, off: boolean) {
+  const lines = blacklist.split('\n').map((l) => l.trim()).filter(Boolean);
+  if (off) return isBlacklisted(blacklist, url) ? blacklist : [...lines, host].join('\n');
+  // Drop the plain rules that match; /regex/ rules are the user's to edit.
+  return lines.filter((rule) => /^\/.+\/[a-z]*$/.test(rule) || !url.includes(rule)).join('\n');
+}
