@@ -2,6 +2,7 @@
 // box isn't there. In the 2026 side-menu layout it moved behind the
 // "Description" icon on the right. The text comes from the player response,
 // so this works whatever layout YouTube serves.
+import { track } from '../../shared/track';
 import type { VideoInfo } from '../../shared/bridge';
 import { $, isVisible, mainVideo, waitFor } from '../dom';
 import type { Module } from '../types';
@@ -37,6 +38,7 @@ function richText(text: string): Node[] {
         e.preventDefault();
         const video = mainVideo();
         if (video) {
+          track('description_timestamp');
           video.currentTime = toSeconds(stamp);
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -81,6 +83,7 @@ function build(info: VideoInfo) {
   toggle.className = 'bt-desc-toggle';
   toggle.textContent = 'Show more';
   const setCollapsed = (collapsed: boolean) => {
+    if (!collapsed && box.classList.contains('bt-collapsed')) track('description_expanded');
     box.classList.toggle('bt-collapsed', collapsed);
     toggle.textContent = collapsed ? 'Show more' : 'Show less';
   };
@@ -105,6 +108,7 @@ async function render(info: VideoInfo) {
   existing?.remove();
   const box = build(info);
   metadata.after(box);
+  track('description_shown');
   // Hide the toggle if the text fits without collapsing.
   requestAnimationFrame(() => {
     const text = box.querySelector<HTMLElement>('.bt-desc-text')!;

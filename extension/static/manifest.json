@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BetterTube",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Fixes YouTube's watch page (normal view, resizable player, description under the video), a fast speed controller for every site, and watch stats.",
   "minimum_chrome_version": "120",
   "permissions": [

@@ -1,6 +1,7 @@
 // Hides Shorts shelves, items and nav entries; opens /shorts/ID in the normal player.
 import { isVisible } from '../dom';
 import type { Module } from '../types';
+import { flushTrack, track } from '../../shared/track';
 
 const SHORTS_SELECTORS = [
   'ytd-reel-shelf-renderer',
@@ -23,7 +24,10 @@ const SHORTS_SELECTORS = [
 
 function redirect() {
   const m = /^\/shorts\/([\w-]{6,})/.exec(location.pathname);
-  if (m) location.replace(`/watch?v=${m[1]}`);
+  if (!m) return;
+  track('shorts_redirected');
+  flushTrack();
+  location.replace(`/watch?v=${m[1]}`);
 }
 
 export const shorts: Module = {

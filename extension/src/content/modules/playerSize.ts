@@ -2,6 +2,7 @@
 // column (double-click it to reset), or set the width / theater height in the
 // popup. Widths go through a stylesheet with !important so they beat the
 // inline sizes YouTube computes.
+import { track } from '../../shared/track';
 import { STORAGE_KEY, withDefaults, type Settings } from '../../shared/settings';
 import { $, alive, waitFor } from '../dom';
 import type { Ctx, Module } from '../types';
@@ -90,12 +91,16 @@ async function ensureHandle(ctx: Ctx) {
       h.classList.remove('bt-dragging');
       document.documentElement.classList.remove('bt-resizing');
       void save({ sidebarWidth: width });
+      track('player_resized');
     };
     h.addEventListener('pointermove', move);
     h.addEventListener('pointerup', up, { once: true });
     h.addEventListener('pointercancel', up, { once: true });
   });
-  handle.addEventListener('dblclick', () => void save({ sidebarWidth: 0 }));
+  handle.addEventListener('dblclick', () => {
+    void save({ sidebarWidth: 0 });
+    track('player_size_reset');
+  });
   secondary.prepend(handle);
 }
 

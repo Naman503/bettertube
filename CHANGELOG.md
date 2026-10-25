@@ -4,6 +4,12 @@ All notable changes to BetterTube. Versions follow [Semantic Versioning](https:/
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-10-26
+
+### Added
+- **Richer anonymous usage** (same off switch, same 6-hour schedule): how speeds are changed (keys, overlay buttons, wheel, slider, chips, typed value, the site's own menu), shortcut actions used, overlay panel opens, gradual speed-up steps / pauses / resumes, popup tabs, quick toggles and presets, dashboard opens, layout fixes applied (view corrections, Shorts redirects, autoplay off, quality changes), a daily "was used" ping, a daily settings snapshot (switches and choices only), and yesterday's watch time, sessions and ads as ranges. Never video IDs, titles, channels, sites, URLs or anything typed; nothing from incognito.
+- **Error reports** from BetterTube's own code (service worker, YouTube scripts, speed controller, popup, dashboard), with addresses and quoted text stripped, at most one per bug per day.
+
 ## [0.5.0] — 2026-10-25
 
 ### Added

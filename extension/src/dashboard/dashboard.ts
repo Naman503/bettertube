@@ -1,4 +1,7 @@
 import { STORAGE_KEY, withDefaults, type Settings } from '../shared/settings';
+import { installErrorCapture, track } from '../shared/track';
+
+installErrorCapture('dashboard', ['dashboard.js']);
 import {
   DAY_PREFIX,
   dayKey,
@@ -412,11 +415,13 @@ async function main() {
     // ignore
   }
   render();
+  track('dashboard_view', { range });
 
   $('range').addEventListener('click', (e) => {
     const b = (e.target as Element).closest<HTMLButtonElement>('button[data-range]');
     if (!b) return;
     range = b.dataset.range as Range;
+    track('dashboard_range', { range });
     try {
       localStorage.setItem('bt-range', range);
     } catch {
@@ -426,6 +431,7 @@ async function main() {
   });
 
   $('export').addEventListener('click', () => {
+    track('stats_exported');
     const data = Object.fromEntries([...days.entries()].sort());
     const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
     el('a', { href: url, download: `bettertube-stats-${dayKey()}.json` }).click();
@@ -434,6 +440,7 @@ async function main() {
 
   $('clear').addEventListener('click', async () => {
     if (!confirm('Delete all BetterTube watch stats? This cannot be undone.')) return;
+    track('stats_cleared');
     await chrome.storage.local.remove([...days.keys()].map((d) => DAY_PREFIX + d));
     await load();
     render();

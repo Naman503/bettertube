@@ -2,9 +2,11 @@
 import { onIsolatedMessage, sendToMain } from '../shared/bridge';
 import { MIRROR_KEY, readMirror, STORAGE_KEY, withDefaults, type Settings } from '../shared/settings';
 import { isIncognito } from '../shared/privacy';
+import { installErrorCapture, reportError, setTrackingOff, track } from '../shared/track';
+import { mainWorldUsage } from '../shared/usageCore';
 import { collectDiagnostics, saveAutoSnapshot } from './diagnostics';
 import { toast } from './dom';
-import { classicLayout } from './modules/classicLayout';
+import { classicLayout, detectLayout } from './modules/classicLayout';
 import { declutter } from './modules/declutter';
 import { density } from './modules/density';
 import { description } from './modules/description';
@@ -14,6 +16,10 @@ import { sidebarFix } from './modules/sidebarFix';
 import { stats } from './modules/stats';
 import { viewMode } from './modules/viewMode';
 import type { Ctx, Module, PageInfo } from './types';
+
+// Anonymous usage: off until we know this isn't incognito.
+setTrackingOff(true);
+installErrorCapture('youtube', ['content.js', 'main.js']);
 
 const modules: Module[] = [viewMode, classicLayout, density, playerSize, sidebarFix, description, shorts, declutter, stats];
 
@@ -35,6 +41,8 @@ function each(fn: (m: Module) => void) {
       fn(m);
     } catch (err) {
       console.error(`[BetterTube] ${m.id}:`, err);
+      track('module_error', { module: m.id });
+      reportError(`youtube.${m.id}`, err);
     }
   }
 }
@@ -97,6 +105,7 @@ function checkNavigation() {
 async function start() {
   applyStyles();
   ctx.incognito = await isIncognito();
+  setTrackingOff(ctx.incognito);
   ctx.settings = withDefaults((await chrome.storage.sync.get(STORAGE_KEY))[STORAGE_KEY] as Partial<Settings> | undefined);
   applyStyles();
   publishSettings();
@@ -115,6 +124,11 @@ async function start() {
 
 onIsolatedMessage((msg) => {
   if (msg.type === 'toast') toast(msg.text);
+  if (msg.type === 'usage') {
+    // Page scripts can fake bridge events: only our three MAIN-world counts, only known values.
+    const ok = mainWorldUsage(msg.n, msg.p);
+    if (ok) track(ok.n, ok.p);
+  }
   if (msg.type !== 'video') return;
   ctx.video = msg.info;
   each((m) => m.onVideo?.(ctx, msg.info));
@@ -122,7 +136,10 @@ onIsolatedMessage((msg) => {
   const id = msg.info.videoId;
   for (const [delay, label] of [[6000, 'settled'], [18000, 'after-guard']] as const) {
     setTimeout(() => {
-      if (ctx.video?.videoId === id) void saveAutoSnapshot(ctx, modules, label);
+      if (ctx.video?.videoId !== id) return;
+      void saveAutoSnapshot(ctx, modules, label);
+      // Which watch-page layout YouTube served, and whether ours won (no page content).
+      if (label === 'settled') track('layout_detected', { variant: detectLayout(), classic: ctx.settings.classicLayout });
     }, delay);
   }
 });

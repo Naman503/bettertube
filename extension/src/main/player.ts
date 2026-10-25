@@ -78,6 +78,7 @@ async function applyQuality(q: Quality) {
       const p = player();
       p.setPlaybackQualityRange?.(pick, pick);
       p.setPlaybackQuality?.(pick);
+      sendToIsolated({ type: 'usage', n: 'default_quality_applied', p: { quality: q, exact: String(QUALITY_ORDER.indexOf(pick) === target) } });
       return;
     }
     await new Promise((r) => setTimeout(r, 500));
@@ -118,6 +119,7 @@ function installAntiBuffer(getSettings: () => Settings) {
       p.setPlaybackQualityRange?.(next, next);
       p.setPlaybackQuality?.(next);
       sendToIsolated({ type: 'toast', text: `Buffering: lowered quality to ${QUALITY_LABELS[next] ?? next}` });
+      sendToIsolated({ type: 'usage', n: 'quality_lowered', p: { to: QUALITY_LABELS[next] ?? 'other' } });
     },
     true,
   );

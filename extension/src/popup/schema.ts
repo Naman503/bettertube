@@ -157,7 +157,7 @@ export const SECTIONS: Section[] = [
       {
         key: 'shareUsage',
         label: 'Share anonymous usage',
-        hint: 'Feature use, speed ranges, minutes saved and videos watched per day, with a random id. Never videos, titles, channels, sites or incognito. Turning it off deletes what was sent.',
+        hint: 'Daily counts of features used, speed ranges, your settings (switches only), watch time ranges and BetterTube errors, with a random id. Never videos, titles, channels, sites, what you type or incognito. Turning it off deletes what was sent.',
         type: 'toggle',
       },
       { key: 'statsBadge', label: "Show today's numbers in YouTube's top bar", type: 'toggle' },
