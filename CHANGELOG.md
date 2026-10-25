@@ -4,6 +4,11 @@ All notable changes to BetterTube. Versions follow [Semantic Versioning](https:/
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-10-25
+
+### Added
+- **Share anonymous usage** (popup → YouTube → Watch stats), on by default: feature switches used, speed changes by range, minutes saved and videos watched per day, and setup milestones, with a random id. Never video IDs, titles, channels, sites or incognito. Turning it off deletes what was sent. Adds the API host permission for sending.
+
 ### Added
 - **Stop gradual speed-up for this video** (`Q`, toggle) and **pause it for a set time** (`W`, default 10 min, any duration). Both are in the speed panel and the popup too. A timed pause carries across videos and tabs and ends by itself; any resume key ends it early. Saved shortcut lists get `Q`/`W` once, if those keys are free.
 - **Incognito mode.** Everything works, but nothing is recorded: no watch stats, no diagnostics snapshot, and your normal site speeds and pause state stay untouched. Incognito speeds start from your normal ones, live in memory only, and are forgotten when the last incognito tab closes. The badge and popup say "Incognito · not recorded". This needs **Allow in Incognito** turned on.

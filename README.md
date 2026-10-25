@@ -10,7 +10,7 @@
 [![Release](https://img.shields.io/github/v/release/Naman503/bettertube?color=EF4444)](https://github.com/Naman503/bettertube/releases)
 ![Brave / Chrome](https://img.shields.io/badge/Brave%20%2F%20Chrome-Manifest%20V3-4285F4?logo=googlechrome&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
-![No tracking](https://img.shields.io/badge/data-stays%20on%20your%20device-22C55E)
+![No accounts](https://img.shields.io/badge/accounts-none-22C55E)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <img src="docs/images/watch-page.png" width="820" alt="A YouTube watch page with BetterTube: normal view, one-column up-next list, description under the video, the speed overlay at 2.35× and today's stats in the top bar">
@@ -42,7 +42,7 @@ BetterTube fixes this at the source: it switches off the experiment flags behind
 | 📊 **Watch stats** | Videos and watch time in YouTube's top bar, plus a dashboard: time saved by speed, habits, top channels, playback health. |
 | 🧹 **Declutter** | No Shorts, AI "Ask" button, end cards, "Continue watching?" prompts or ambient glow. |
 | 🔋 **Lighter playback** | Blocks AV1 on Macs without hardware decoding (M1/M2, Intel). Steps quality down when a video keeps buffering. |
-| 🔒 **Private** | No accounts, servers or analytics. Everything is stored in your browser. |
+| 🔒 **Private** | No accounts. Your stats stay in your browser; only anonymous usage counts are shared, with an off switch. |
 
 ## Screenshots
 
@@ -140,9 +140,10 @@ The speed climbs while you watch, measured in real playback time, so pauses and 
 
 ## Privacy
 
-BetterTube has **no servers, accounts or analytics**.
+BetterTube has **no accounts**, and your watch history never leaves your browser.
 
-- **Where data lives:** settings are in `chrome.storage.sync`; stats and site speeds are in `chrome.storage.local`. Nothing leaves your browser.
+- **Where data lives:** settings are in `chrome.storage.sync`; stats and site speeds are in `chrome.storage.local`.
+- **Anonymous usage:** BetterTube shares feature switches used, speed changes by range (under 1×, 1–1.5×, 1.5–2.5×, over 2.5×), minutes saved and videos watched per day, and setup milestones, with a random id, to the author's server every 6 hours. Never video IDs, titles, channels, sites or anything from incognito. Turn it off in the popup (**YouTube → Watch stats → Share anonymous usage**); that also deletes what was sent.
 - **Retention:** stats are kept for 400 days and can be exported or cleared from the dashboard.
 - **Incognito:** everything works the same, but nothing is recorded. No watch stats, no diagnostics snapshot, and your normal site speeds and pause state are left alone. Speeds you set in incognito start from your normal ones, are kept in memory only (`chrome.storage.session`), and are forgotten when you close your last incognito tab. To use it, turn on **Allow in Incognito** in `brave://extensions` (or `chrome://extensions`) → BetterTube → Details.
 - **Permissions:**
@@ -150,6 +151,7 @@ BetterTube has **no servers, accounts or analytics**.
 | Permission | Why |
 |---|---|
 | `storage` | Settings, stats, site speeds |
+| `api.np-dev.duckdns.org` | Sending anonymous usage (off switch in the popup) |
 | `alarms` | Development builds check for a rebuild every 30 s |
 | `youtube.com` | The YouTube fixes and stats |
 | All sites (content script only) | The speed controller, which works on any site with video or audio |
