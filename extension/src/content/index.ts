@@ -3,6 +3,7 @@ import { onIsolatedMessage, sendToMain } from '../shared/bridge';
 import { MIRROR_KEY, readMirror, STORAGE_KEY, withDefaults, type Settings } from '../shared/settings';
 import { isIncognito } from '../shared/privacy';
 import { installErrorCapture, reportError, setTrackingOff, track } from '../shared/track';
+import { mainWorldUsage } from '../shared/usageCore';
 import { collectDiagnostics, saveAutoSnapshot } from './diagnostics';
 import { toast } from './dom';
 import { classicLayout, detectLayout } from './modules/classicLayout';
@@ -123,7 +124,11 @@ async function start() {
 
 onIsolatedMessage((msg) => {
   if (msg.type === 'toast') toast(msg.text);
-  if (msg.type === 'usage') track(msg.n, msg.p);
+  if (msg.type === 'usage') {
+    // Page scripts can fake bridge events: only our three MAIN-world counts, only known values.
+    const ok = mainWorldUsage(msg.n, msg.p);
+    if (ok) track(ok.n, ok.p);
+  }
   if (msg.type !== 'video') return;
   ctx.video = msg.info;
   each((m) => m.onVideo?.(ctx, msg.info));

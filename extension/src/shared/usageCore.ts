@@ -61,6 +61,32 @@ export const CLIENT_COUNTERS = new Set([
   'stats_cleared',
 ]);
 
+/**
+ * The only counts the YouTube MAIN-world script may send over the page-visible
+ * bridge (any page script can fake those events): known names, known values.
+ */
+const TF = ['true', 'false'];
+const MAIN_WORLD: Record<string, Record<string, string[]>> = {
+  layout_flags_applied: { layout: TF, ambient: TF, corners: TF, controls: TF },
+  default_quality_applied: { quality: ['2160', '1440', '1080', '720', '480', '360'], exact: TF },
+  quality_lowered: { to: ['2160p', '1440p', '1080p', '720p', '480p', '360p', '240p', '144p', 'other'] },
+};
+
+/** A MAIN-world usage message, or null if it isn't exactly one we send. */
+export function mainWorldUsage(n: unknown, p: unknown): { n: string; p: Record<string, string> } | null {
+  if (typeof n !== 'string' || !Object.hasOwn(MAIN_WORLD, n)) return null;
+  const allowed = MAIN_WORLD[n];
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return null;
+  const entries = Object.entries(p as Record<string, unknown>);
+  if (entries.length !== Object.keys(allowed).length) return null;
+  const out: Record<string, string> = {};
+  for (const [k, v] of entries) {
+    if (!Object.hasOwn(allowed, k) || typeof v !== 'string' || !allowed[k].includes(v)) return null;
+    out[k] = v;
+  }
+  return { n, p: out };
+}
+
 /** Counted at most once per day, however many tabs report it. */
 export const ONCE_A_DAY = new Set(['daily_limit_reached', 'settings_searched']);
 
@@ -140,19 +166,6 @@ export function hash(s: string): string {
 }
 
 /**
- * Error text with anything page- or user-derived removed: URLs, quoted strings,
- * long numbers and ids. Leaves the error class and our own wording.
- */
-export function scrubMessage(msg: string): string {
-  return msg
-    .replace(/\b[a-z][a-z0-9+.-]*:\/\/\S+/gi, '<url>')
-    .replace(/"[^"]*"|'[^']*'|`[^`]*`/g, '<str>')
-    .replace(/\b[\w-]{11,}\b/g, (w) => (/^[A-Za-z]+$/.test(w) ? w : '<id>'))
-    .replace(/\d{3,}/g, '<n>')
-    .slice(0, 300);
-}
-
-/**
  * Keeps only the frames in our own bundles ("background.js:12:345"), with the
  * extension id dropped. Page frames are removed entirely.
  */
@@ -187,13 +200,14 @@ export function buildCrash(
   t = Date.now(),
 ): CrashReport {
   const e = typeof err === 'string' ? { name: 'Error', message: err } : err;
-  const name = String(e.name || 'Error').replace(/[^\w]/g, '').slice(0, 40) || 'Error';
-  const message = scrubMessage(String(e.message ?? ''));
+  // The exception text is never sent: it can carry page or user text (titles, URLs, any script).
+  // Only the error class, and our own stack frames for grouping.
+  const name = String(e.name || 'Error').replace(/[^A-Za-z0-9_]/g, '').slice(0, 40) || 'Error';
   const st = scrubStack(e.stack, extBase);
-  const top = st?.split('\n')[0]?.replace(/:\d+(?=\D*$)/, '') ?? '';
+  const top = st?.split('\n').slice(0, 3).join('|') ?? '';
   return {
-    fp: `${surface}:${name}:${hash(`${name}|${message.slice(0, 80)}|${top}`)}`.slice(0, 64),
-    m: `[${surface}] ${name}: ${message}`.slice(0, 500),
+    fp: `${surface}:${name}:${hash(`${name}|${top}`)}`.slice(0, 64),
+    m: `[${surface}] ${name}`.slice(0, 500),
     ...(st ? { st } : {}),
     t,
     ...(fatal ? { fatal } : {}),

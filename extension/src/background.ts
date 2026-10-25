@@ -201,7 +201,8 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
   } else if (msg?.type === 'usage:crash') {
     if (sender.tab?.incognito) return;
     const c = msg.crash as { fp?: unknown; m?: unknown; st?: unknown; fatal?: unknown } | undefined;
-    if (typeof c?.fp !== 'string' || typeof c.m !== 'string') return;
+    // Only "[surface] ErrorClass": never exception text.
+    if (typeof c?.fp !== 'string' || typeof c.m !== 'string' || !/^\[[\w.]{1,40}\] [A-Za-z0-9_]{1,40}$/.test(c.m)) return;
     void usageCrash({
       fp: c.fp.slice(0, 64),
       m: c.m.slice(0, 500),

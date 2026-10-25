@@ -64,13 +64,19 @@ test('settingValue drops free text', () => {
   assert.equal(core.settingValue({}), undefined);
 });
 
-test('scrubMessage removes URLs, quoted text, ids and long numbers', () => {
-  const m = core.scrubMessage(`Failed at https://www.youtube.com/watch?v=dQw4w9WgXcQ for "My Title" id aB3_xY9-qQ12 #123456`);
-  assert.ok(!m.includes('youtube'));
-  assert.ok(!m.includes('My Title'));
-  assert.ok(!m.includes('aB3_xY9-qQ12'));
-  assert.ok(!m.includes('123456'));
-  assert.match(m, /<url>/);
+test('mainWorldUsage accepts only our three MAIN-world counts with known values', () => {
+  assert.deepEqual(core.mainWorldUsage('quality_lowered', { to: '720p' }), { n: 'quality_lowered', p: { to: '720p' } });
+  assert.deepEqual(core.mainWorldUsage('default_quality_applied', { quality: '1080', exact: 'true' }), {
+    n: 'default_quality_applied',
+    p: { quality: '1080', exact: 'true' },
+  });
+  assert.ok(core.mainWorldUsage('layout_flags_applied', { layout: 'true', ambient: 'false', corners: 'false', controls: 'true' }));
+  assert.equal(core.mainWorldUsage('speed_changed', { speed: 'fast', via: 'key' }), null);
+  assert.equal(core.mainWorldUsage('quality_lowered', { to: 'My title' }), null);
+  assert.equal(core.mainWorldUsage('quality_lowered', { to: '720p', extra: 'x' }), null);
+  assert.equal(core.mainWorldUsage('quality_lowered', undefined), null);
+  assert.equal(core.mainWorldUsage('toString', {}), null);
+  assert.equal(core.mainWorldUsage('default_quality_applied', { quality: '1080' }), null);
 });
 
 test('scrubStack keeps only our frames, without the extension id', () => {
@@ -93,17 +99,20 @@ test('isOurs tells our errors from the page', () => {
 });
 
 test('buildCrash fits the API limits and fingerprints stably', () => {
-  const err = { name: 'TypeError', message: 'Cannot read properties of null', stack: `TypeError: x\n    at a (${BASE}background.js:1:2)` };
+  const err = { name: 'TypeError', message: 'Cannot read "मेरा वीडियो" Hindititle https://x.com', stack: `TypeError: x\n    at a (${BASE}background.js:1:2)` };
   const a = core.buildCrash('background', err, BASE, true, 1);
   const b = core.buildCrash('background', err, BASE, true, 2);
   assert.equal(a.fp, b.fp);
   assert.ok(a.fp.length <= 64);
-  assert.ok(a.m.length <= 500);
+  assert.equal(a.m, '[background] TypeError');
+  assert.ok(!JSON.stringify(a).includes('Hindi') && !JSON.stringify(a).includes('वीडियो') && !JSON.stringify(a).includes('x.com'));
+  // Same class and frames, different text: same fingerprint.
+  assert.equal(core.buildCrash('background', { ...err, message: 'other words' }, BASE).fp, a.fp);
   assert.ok(!a.st.includes(BASE));
   assert.equal(a.fatal, true);
   const c = core.buildCrash('popup', 'plain string', BASE);
   assert.equal(c.st, undefined);
-  assert.match(c.m, /^\[popup\] Error: /);
+  assert.equal(c.m, '[popup] Error');
 });
 
 test('counter keys round-trip, with non-string props stringified', () => {

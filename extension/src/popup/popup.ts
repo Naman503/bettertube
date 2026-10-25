@@ -27,6 +27,8 @@ import { DAY_PREFIX, dayKey, fmtDuration, summarize, type DayStats } from '../sh
 import { SECTIONS, type Field } from './schema';
 import { flushTrack, installErrorCapture, setTrackDelay, setTrackingOff, track } from '../shared/track';
 
+// Nothing (counts or errors) until main() knows the window isn't incognito.
+setTrackingOff(true);
 installErrorCapture('popup', ['popup.js']);
 setTrackDelay(300);
 
@@ -1021,8 +1023,9 @@ async function main() {
   settings = withDefaults(sync[STORAGE_KEY] as Partial<Settings> | undefined);
   speed = withSpeedDefaults(sync[SPEED_KEY] as Partial<SpeedSettings> | undefined);
   [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  // Anonymous usage: nothing while an incognito tab is in front.
-  setTrackingOff(!!activeTab?.incognito);
+  // Anonymous usage: nothing at all from an incognito window.
+  const win = await chrome.windows.getCurrent().catch(() => null);
+  setTrackingOff(!win || win.incognito || !!activeTab?.incognito || !!chrome.extension?.inIncognitoContext);
   const onYouTube = !!activeTab?.url?.startsWith('https://www.youtube.com/');
   track('popup_opened', { surface: document.body.classList.contains('full') ? 'options' : 'popup', youtube: onYouTube });
 
