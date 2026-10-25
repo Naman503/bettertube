@@ -1,6 +1,7 @@
 // Overrides YouTube experiment flags before the app bundle reads them, so
 // YouTube itself renders the older layout / player. Flags are read once per
 // full page load, so changes here need a reload.
+import { sendToIsolated } from '../shared/bridge';
 import type { Settings } from '../shared/settings';
 
 type FlagValue = boolean | string;
@@ -109,7 +110,23 @@ export function installFlagOverrides(getSettings: () => Settings) {
   observer.observe(document, { childList: true, subtree: true });
   document.addEventListener('DOMContentLoaded', () => {
     patch();
-    setTimeout(() => observer.disconnect(), 10_000);
+    setTimeout(() => {
+      observer.disconnect();
+      // Anonymous usage: which groups of YouTube flags we had to override on this load.
+      const names = Object.keys(appliedFlags);
+      if (!names.length) return;
+      const has = (re: RegExp) => String(names.some((n) => re.test(n)));
+      sendToIsolated({
+        type: 'usage',
+        n: 'layout_flags_applied',
+        p: {
+          layout: has(/watch_grid|side_rail|split_scroll|fixed_|sidebar_width|secondary_max|disable_theater/),
+          ambient: has(/cinematics/),
+          corners: has(/rounded/),
+          controls: has(/delhi/),
+        },
+      });
+    }, 10_000);
   });
   document.addEventListener('yt-navigate-finish', patch);
   patch();

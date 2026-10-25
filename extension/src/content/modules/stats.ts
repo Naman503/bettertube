@@ -1,5 +1,6 @@
 // Tracks watch time, videos, sessions and playback health, and shows today's
 // numbers in a badge in YouTube's top bar (click it for the full dashboard).
+import { track } from '../../shared/track';
 import { onIsolatedMessage, type PlayerStats } from '../../shared/bridge';
 import { DAY_PREFIX, dayKey, fmtDuration, summarize, type DayStats, type Tick } from '../../shared/stats';
 import { $, alive, mainVideo, waitFor } from '../dom';
@@ -194,7 +195,9 @@ function buildBadge() {
 
   root.append(videos, time, card);
   const open = () => {
-    if (alive()) void chrome.runtime.sendMessage({ type: 'open-dashboard' }).catch(() => {});
+    if (!alive()) return;
+    track('dashboard_opened', { from: 'badge' });
+    void chrome.runtime.sendMessage({ type: 'open-dashboard' }).catch(() => {});
   };
   root.addEventListener('click', open);
   root.addEventListener('keydown', (e) => {
@@ -242,6 +245,7 @@ async function renderBadge() {
   badgeParts.time.textContent = fmtDuration(s.watchMs);
   const ratio = limitMs ? s.watchMs / limitMs : 0;
   badge.dataset.level = !limitMs ? 'none' : ratio >= 1 ? 'over' : ratio >= 0.8 ? 'near' : 'ok';
+  if (badge.dataset.level === 'over') track('daily_limit_reached');
   badge.style.setProperty('--bt-limit', `${Math.min(1, ratio) * 100}%`);
   badge.title = '';
 

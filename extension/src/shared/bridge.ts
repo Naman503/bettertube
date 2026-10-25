@@ -44,6 +44,8 @@ export type ToIsolated =
   | { type: 'video'; info: VideoInfo }
   | { type: 'player-stats'; stats: PlayerStats }
   | { type: 'toast'; text: string }
+  /** Anonymous usage count from the MAIN world (fixed names and enums only). */
+  | { type: 'usage'; n: string; p?: Record<string, string> }
   | { type: 'recon-result'; id: string; data: MainRecon };
 
 function emit(name: string, msg: unknown) {

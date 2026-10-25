@@ -1,6 +1,6 @@
 {
   "name": "bettertube",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,8 @@
     "icons": "node scripts/make-icons.mjs",
     "test:smoke": "node tests/smoke.mjs",
     "package": "node build.mjs && cd dist && rm -f build.json && zip -qr ../bettertube-v$npm_package_version.zip . && echo bettertube-v$npm_package_version.zip",
-    "screenshots": "node tests/screenshots.mjs"
+    "screenshots": "node tests/screenshots.mjs",
+    "test:unit": "node --test tests/usage.test.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.4",

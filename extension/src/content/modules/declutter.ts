@@ -2,6 +2,7 @@
 // "Video paused. Continue watching?" dialog.
 import { $, isVisible, waitFor } from '../dom';
 import type { Module } from '../types';
+import { track } from '../../shared/track';
 
 // Best-effort: these elements are new and their names are unconfirmed.
 // The Diagnostics tab shows whether they matched anything.
@@ -59,6 +60,7 @@ export const declutter: Module = {
           const dialog = $('ytd-popup-container yt-confirm-dialog-renderer');
           if (!isVisible(dialog)) return;
           $('#confirm-button button, #confirm-button', dialog!)?.click();
+          track('idle_dialog_dismissed');
           void video.play();
         }, 500);
       },
@@ -72,7 +74,10 @@ export const declutter: Module = {
     const toggle = await waitFor('#movie_player .ytp-autonav-toggle-button');
     if (!toggle) return;
     autoplayHandled = true;
-    if (toggle.getAttribute('aria-checked') === 'true') toggle.click();
+    if (toggle.getAttribute('aria-checked') === 'true') {
+      toggle.click();
+      track('autoplay_turned_off');
+    }
   },
 
   check(ctx) {

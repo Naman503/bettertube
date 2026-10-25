@@ -25,6 +25,10 @@ import {
 } from '../shared/speedSettings';
 import { DAY_PREFIX, dayKey, fmtDuration, summarize, type DayStats } from '../shared/stats';
 import { SECTIONS, type Field } from './schema';
+import { flushTrack, installErrorCapture, setTrackDelay, setTrackingOff, track } from '../shared/track';
+
+installErrorCapture('popup', ['popup.js']);
+setTrackDelay(300);
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const VERSION = chrome.runtime.getManifest().version;
@@ -84,6 +88,7 @@ function hydrateIcons(root: ParentNode = document) {
 let settings: Settings = withDefaults(undefined);
 let speed: SpeedSettings = withSpeedDefaults(undefined);
 let activeTab: chrome.tabs.Tab | undefined;
+let searched = false;
 
 async function saveSettings(patch: Partial<Settings>) {
   const before = settings;
@@ -102,7 +107,11 @@ async function saveSpeed(patch: Partial<SpeedSettings>) {
 
 // ---------- alerts ----------
 
+/** Alert ids → fixed names for anonymous usage. */
+const alertName = (id: string) => id.replace(/^alert-/, '');
+
 function showAlert(id: string, title: string, body: string, actions: [label: string, fn: () => void][] = []) {
+  track('alert_shown', { alert: alertName(id) });
   document.getElementById(id)?.remove();
   const box = el('div', { className: 'alert', id }, el('span', {}, icon('alert')), el('div', {}, el('b', {}, title), body));
   box.firstElementChild!.setAttribute('data-icon', 'alert');
@@ -113,7 +122,11 @@ function showAlert(id: string, title: string, body: string, actions: [label: str
         { className: 'actions' },
         ...actions.map(([label, fn]) => {
           const b = el('button', { className: 'btn small' }, label);
-          b.addEventListener('click', fn);
+          b.addEventListener('click', () => {
+            track('alert_action', { alert: alertName(id) });
+            flushTrack();
+            fn();
+          });
           return b;
         }),
       ),
@@ -220,6 +233,7 @@ function renderSpeedNow(
           : 'Speed on this tab';
   const toggle = switchControl(`Speed controller on ${host}`, !blocked, (on) => {
     const next = toggleSiteOff(speed.blacklist, url, host, !on);
+    track('site_speed_toggle', { on });
     void saveSpeed({ blacklist: next }).then(() => {
       ($('blacklist') as HTMLTextAreaElement).value = next;
       renderSpeedNow({ ...s, active: speed.enabled && !isBlacklisted(next, url) }, url);
@@ -262,6 +276,8 @@ async function renderToday() {
 }
 
 interface Quick {
+  /** Fixed name for anonymous usage. */
+  id: string;
   label: string;
   icon: string;
   get: () => boolean;
@@ -270,16 +286,22 @@ interface Quick {
 
 const QUICK: Quick[] = [
   {
+    id: 'normal_view',
     label: 'Open in normal view',
     icon: 'view',
     get: () => settings.viewMode === 'default',
     set: (on) => saveSettings({ viewMode: on ? 'default' : 'remember' }),
   },
-  { label: 'Classic layout', icon: 'layout', get: () => settings.classicLayout, set: (on) => saveSettings({ classicLayout: on, compactSidebar: on }) },
-  { label: 'Hide Shorts', icon: 'shorts', get: () => settings.hideShorts, set: (on) => saveSettings({ hideShorts: on, redirectShorts: on }) },
-  { label: 'Description under video', icon: 'text', get: () => settings.restoreDescription, set: (on) => saveSettings({ restoreDescription: on }) },
-  { label: 'Speed controller', icon: 'gauge', get: () => speed.enabled, set: (on) => saveSpeed({ enabled: on }) },
+  { id: 'classic_layout',
+    label: 'Classic layout', icon: 'layout', get: () => settings.classicLayout, set: (on) => saveSettings({ classicLayout: on, compactSidebar: on }) },
+  { id: 'hide_shorts',
+    label: 'Hide Shorts', icon: 'shorts', get: () => settings.hideShorts, set: (on) => saveSettings({ hideShorts: on, redirectShorts: on }) },
+  { id: 'description',
+    label: 'Description under video', icon: 'text', get: () => settings.restoreDescription, set: (on) => saveSettings({ restoreDescription: on }) },
+  { id: 'speed_controller',
+    label: 'Speed controller', icon: 'gauge', get: () => speed.enabled, set: (on) => saveSpeed({ enabled: on }) },
   {
+    id: 'watch_stats',
     label: 'Watch stats',
     icon: 'chart',
     get: () => settings.statsEnabled && settings.statsBadge,
@@ -295,6 +317,7 @@ function renderQuick() {
       b.setAttribute('role', 'switch');
       b.setAttribute('aria-checked', String(q.get()));
       b.addEventListener('click', async () => {
+        track('quick_toggle', { item: q.id, on: !q.get() });
         await q.set(!q.get());
         b.setAttribute('aria-checked', String(q.get()));
         renderSections();
@@ -304,9 +327,10 @@ function renderQuick() {
     }),
   );
   $('presets').replaceChildren(
-    ...Object.values(PRESETS).map((p) => {
+    ...Object.entries(PRESETS).map(([id, p]) => {
       const b = el('button', { className: 'preset', title: p.description }, el('b', {}, p.label), el('span', {}, p.description));
       b.addEventListener('click', async () => {
+        track('preset_applied', { preset: id });
         await saveSettings(p.values);
         renderQuick();
         renderSections();
@@ -387,6 +411,9 @@ function renderSections() {
 
 function applySearch() {
   const q = ($('search') as HTMLInputElement).value.trim().toLowerCase();
+  // Only that the search box was used, never what was typed.
+  if (q && !searched) track('settings_searched');
+  searched ||= !!q;
   for (const card of $('sections').children as HTMLCollectionOf<HTMLElement>) {
     let any = false;
     for (const row of card.querySelectorAll<HTMLElement>('.row')) {
@@ -679,6 +706,7 @@ async function renderSiteSpeeds() {
         const del = el('button', { className: 'del', title: `Forget ${site}` }, '✕');
         del.setAttribute('aria-label', `Forget the speed for ${site}`);
         del.addEventListener('click', () => {
+          track('site_speeds_forgotten', { scope: 'one' });
           const next = { ...stored };
           delete next[site];
           void save(next);
@@ -688,7 +716,10 @@ async function renderSiteSpeeds() {
     );
   }
   $('forget-sites').hidden = !sites.length;
-  $('forget-sites').onclick = () => void save({});
+  $('forget-sites').onclick = () => {
+    track('site_speeds_forgotten', { scope: 'all' });
+    void save({});
+  };
 }
 
 /** "No speed-up between [1.00]× and [2.00]×" with an on/off switch. */
@@ -737,6 +768,7 @@ async function renderRampPaused() {
   const keys = speed.shortcuts.filter((x) => x.code && rampEffectOf(x) === 'resume').map((x) => keyLabel(x.code));
   const resume = el('button', { className: 'btn small' }, 'Resume');
   resume.addEventListener('click', async () => {
+    track('ramp_control', { action: 'resumed', via: 'popup' });
     await chrome.storage.local.set({ [RAMP_PAUSED_KEY]: false, [RAMP_PAUSED_UNTIL_KEY]: 0 });
     void renderRampPaused();
   });
@@ -771,6 +803,7 @@ function pauseForRow() {
     ...([[5, '5 min'], [10, '10 min'], [30, '30 min'], [60, '1 h'], [120, '2 h']] as [number, string][]).map(([mins, label]) => {
       const c = el('button', { className: 'chip' }, label);
       c.addEventListener('click', async () => {
+        track('ramp_control', { action: 'pause_for', via: 'popup' });
         await chrome.storage.local.set({ [RAMP_PAUSED_UNTIL_KEY]: Date.now() + mins * 60_000 });
         void renderRampPaused();
       });
@@ -821,6 +854,8 @@ function renderShortcuts() {
   const counts = new Map<string, number>();
   for (const s of speed.shortcuts) if (s.code) counts.set(s.code, (counts.get(s.code) ?? 0) + 1);
   const update = (i: number, patch: Partial<Shortcut>) => {
+    const change = 'code' in patch ? 'key' : 'action' in patch ? 'action' : 'ramp' in patch ? 'ramp_effect' : 'value';
+    track('shortcut_edited', { change });
     const shortcuts = speed.shortcuts.map((s, j) => (j === i ? { ...s, ...patch } : s));
     void saveSpeed({ shortcuts }).then(renderShortcuts);
   };
@@ -881,7 +916,10 @@ function renderShortcuts() {
 
       const del = el('button', { className: 'del', title: 'Remove' }, '✕');
       del.setAttribute('aria-label', 'Remove shortcut');
-      del.addEventListener('click', () => void saveSpeed({ shortcuts: speed.shortcuts.filter((_, j) => j !== i) }).then(renderShortcuts));
+      del.addEventListener('click', () => {
+        track('shortcut_edited', { change: 'removed' });
+        void saveSpeed({ shortcuts: speed.shortcuts.filter((_, j) => j !== i) }).then(renderShortcuts);
+      });
       return el('div', { className: 'sc' }, action, key, value, effect, del);
     }),
   );
@@ -912,6 +950,7 @@ async function runDiagnostics() {
     return;
   }
   note.textContent = 'Checking…';
+  track('diagnostics_run');
   try {
     lastDiagnostics = (await chrome.tabs.sendMessage(tab.id, { type: 'diagnostics' })) as Diagnostics;
   } catch {
@@ -936,6 +975,7 @@ async function copyDiagnostics() {
   if (!lastDiagnostics) await runDiagnostics();
   if (!lastDiagnostics) return;
   await navigator.clipboard.writeText(JSON.stringify(lastDiagnostics, null, 2));
+  track('diagnostics_copied');
   const b = $('diag-copy');
   b.textContent = 'Copied ✓';
   setTimeout(() => (b.textContent = 'Copy diagnostics'), 1500);
@@ -981,6 +1021,10 @@ async function main() {
   settings = withDefaults(sync[STORAGE_KEY] as Partial<Settings> | undefined);
   speed = withSpeedDefaults(sync[SPEED_KEY] as Partial<SpeedSettings> | undefined);
   [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  // Anonymous usage: nothing while an incognito tab is in front.
+  setTrackingOff(!!activeTab?.incognito);
+  const onYouTube = !!activeTab?.url?.startsWith('https://www.youtube.com/');
+  track('popup_opened', { surface: document.body.classList.contains('full') ? 'options' : 'popup', youtube: onYouTube });
 
   const chip = detectChip();
   if (chip && chip !== settings.chip) await saveSettings({ chip });
@@ -992,7 +1036,10 @@ async function main() {
   void checkActiveTab();
 
   for (const b of document.querySelectorAll<HTMLButtonElement>('.tabs button')) {
-    b.addEventListener('click', () => selectTab(b.dataset.tab!));
+    b.addEventListener('click', () => {
+      track('popup_tab', { tab: b.dataset.tab! });
+      selectTab(b.dataset.tab!);
+    });
   }
   try {
     const last = localStorage.getItem('bt-popup-tab');
@@ -1002,22 +1049,30 @@ async function main() {
   }
 
   $('open-dashboard').addEventListener('click', () => {
+    track('dashboard_opened', { from: 'popup' });
+    flushTrack();
     void chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
     window.close();
   });
   $('search').addEventListener('input', applySearch);
   $('reset').addEventListener('click', async () => {
+    track('settings_reset');
     await saveSettings({ ...DEFAULTS, chip: settings.chip });
     renderQuick();
     renderSections();
   });
   $('add-shortcut').addEventListener('click', () => {
+    track('shortcut_edited', { change: 'added' });
     void saveSpeed({ shortcuts: [...speed.shortcuts, { action: 'preferred', code: '', value: 2 }] }).then(renderShortcuts);
   });
   $('speed-defaults').addEventListener('click', () => {
+    track('shortcut_edited', { change: 'defaults' });
     void saveSpeed({ shortcuts: DEFAULT_SPEED_SETTINGS.shortcuts }).then(renderShortcuts);
   });
-  $('blacklist').addEventListener('change', () => void saveSpeed({ blacklist: ($('blacklist') as HTMLTextAreaElement).value }));
+  $('blacklist').addEventListener('change', () => {
+    track('blacklist_edited');
+    void saveSpeed({ blacklist: ($('blacklist') as HTMLTextAreaElement).value });
+  });
   $('diag-refresh').addEventListener('click', () => void runDiagnostics());
   $('diag-copy').addEventListener('click', () => void copyDiagnostics());
 }

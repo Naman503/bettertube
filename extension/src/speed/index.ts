@@ -31,6 +31,16 @@ import {
   type SpeedSettings,
 } from '../shared/speedSettings';
 import { INCOGNITO_PREFIX, isIncognito } from '../shared/privacy';
+import { installErrorCapture, setTrackingOff, track } from '../shared/track';
+import { speedBucket } from '../shared/usageCore';
+
+// Anonymous usage: counts only (how the speed changed, which shortcut action), never the site.
+// Off until we know this isn't incognito.
+setTrackingOff(true);
+installErrorCapture('speed', ['speed.js', 'speed-main.js']);
+
+/** How a speed change was made, for anonymous usage. */
+type Via = 'key' | 'overlay_button' | 'overlay_wheel' | 'overlay_slider' | 'overlay_input' | 'overlay_chip';
 
 let settings: SpeedSettings = withSpeedDefaults(undefined);
 let shortcuts = new Map<string, Shortcut>();
@@ -190,13 +200,12 @@ function rememberSpeed(rate: number) {
   }, 400);
 }
 
-/** A speed you chose (keys, overlay, or the site's own menu). */
-function userSetRate(m: HTMLMediaElement, rate: number) {
+/** A speed you chose (keys, overlay, or the site's own menu). `via` undefined = don't count (slider mid-drag). */
+function userSetRate(m: HTMLMediaElement, rate: number, via?: Via) {
   setRate(m, rate);
   rememberSpeed(round(clamp(rate)));
   onManualChange(m);
-  // Anonymous usage: the background keeps only a speed range (incognito is dropped there).
-  void chrome.runtime.sendMessage({ type: 'usage:speed', rate: round(clamp(rate)) }).catch(() => {});
+  if (via) track('speed_changed', { speed: speedBucket(round(clamp(rate))), via });
 }
 
 // ---------- gradual speed-up ----------
@@ -245,9 +254,11 @@ function applyRampEffect(effect: RampEffect, m: HTMLMediaElement): string | null
   if (effect === 'pause') {
     if (rampPaused) return null;
     setRampPaused(true);
+    track('ramp_control', { action: 'paused_by_key', via: 'key' });
     return 'Speed-up paused';
   }
   const wasStopped = rampPaused || rampHeld.has(m) || Date.now() < rampTimedUntil;
+  if (wasStopped) track('ramp_control', { action: 'resumed_by_key', via: 'key' });
   setRampPaused(false);
   rampHeld.delete(m);
   rampPausedUntil = 0;
@@ -331,6 +342,7 @@ function rampTick() {
   if (settings.rampEaseOnRewind && delta < -4 && delta > -180 && !rampHeld.has(m)) {
     const eased = round(Math.max(Math.min(1, m.playbackRate), m.playbackRate - 0.05));
     setRate(m, eased);
+    track('ramp_eased');
     if (settings.rampCarryOver) rememberSpeed(eased);
     rampPausedUntil = Date.now() + 60_000;
     rampNote = `Eased to ${fmt(eased)}× after you rewound; climbing again in a minute`;
@@ -358,6 +370,8 @@ function rampTick() {
   if (next <= m.playbackRate) next = Math.min(settings.rampMax, m.playbackRate + settings.rampStep);
   if (next <= m.playbackRate) return;
   setRate(m, next);
+  track('ramp_step', { speed: speedBucket(next) });
+  if (next >= settings.rampMax) track('ramp_reached_max');
   // Carry over: the next video starts where this one got to.
   if (settings.rampCarryOver) rememberSpeed(next);
   stateOf(m).controller?.update();
@@ -384,9 +398,12 @@ async function saveSpeedSettings(patch: Partial<SpeedSettings>) {
 function adopt(m: HTMLMediaElement) {
   if (!eligible(m)) return;
   touch(m);
-  announceHasMedia();
+  announceHasMedia(m);
   const s = stateOf(m);
-  if (settings.rememberSpeed && m.playbackRate !== targetSpeed()) setRate(m, targetSpeed());
+  if (settings.rememberSpeed && m.playbackRate !== targetSpeed()) {
+    setRate(m, targetSpeed());
+    track('speed_restored', { speed: speedBucket(targetSpeed()) });
+  }
   if (!s.controller && m instanceof HTMLVideoElement && wantsOverlay(m)) s.controller = new Controller(m);
   s.controller?.update();
 }
@@ -424,10 +441,12 @@ function onMediaEvent(e: Event) {
         const siteReset = Date.now() - s.loadedAt < RESET_WINDOW_MS;
         if (settings.rememberSpeed && (settings.forceSpeed || siteReset) && rate !== targetSpeed()) {
           setRate(m, targetSpeed()); // the site put its own speed back; keep yours
+          track('site_speed_overridden', { why: siteReset ? 'load_reset' : 'forced' });
         } else {
           rememberSpeed(rate); // you changed it in the site's own menu
           s.ownRate = rate; // the known current rate from now on
           onManualChange(m);
+          track('speed_changed', { speed: speedBucket(rate), via: 'site' });
         }
         s.controller?.blink();
       }
@@ -449,10 +468,11 @@ function seekTo(m: HTMLMediaElement, time: number) {
   else m.currentTime = t;
 }
 
-function run(action: SpeedAction, m: HTMLMediaElement, value: number) {
+function run(action: SpeedAction, m: HTMLMediaElement, value: number, via: Via | 'overlay_panel' = 'key') {
   const s = stateOf(m);
   const rate = m.playbackRate;
-  const change = (next: number) => userSetRate(m, next);
+  const rampVia = via === 'key' ? 'key' : 'overlay';
+  const change = (next: number) => userSetRate(m, next, via === 'overlay_panel' ? 'overlay_button' : via);
   switch (action) {
     case 'faster':
       change(rate + value);
@@ -501,6 +521,7 @@ function run(action: SpeedAction, m: HTMLMediaElement, value: number) {
       rampPausedUntil = 0;
       setRampPaused(false);
       void saveSpeedSettings({ ramp: on });
+      track('ramp_control', { action: on ? 'on' : 'off', via: rampVia });
       if (on) startRamp();
       if (rampTimedUntil) setTimedPause(0);
       s.controller?.flashLabel(on ? 'Speed-up on' : 'Speed-up off');
@@ -509,6 +530,10 @@ function run(action: SpeedAction, m: HTMLMediaElement, value: number) {
     case 'rampHoldVideo':
     case 'rampPauseFor': {
       const label = action === 'rampHoldVideo' ? toggleHoldVideo(m) : pauseFor(value);
+      track('ramp_control', {
+        action: action === 'rampPauseFor' ? 'pause_for' : rampHeld.has(m) ? 'hold_video' : 'resume_video',
+        via: rampVia,
+      });
       if (s.controller) s.controller.flashLabel(label);
       else cornerBadge(label);
       return;
@@ -534,7 +559,11 @@ function onKey(e: KeyboardEvent) {
   const sc = shortcuts.get(e.code);
   if (!sc) return;
   // Another speed extension is handling keys on this page; don't double up.
-  if (vscPresent()) return;
+  if (vscPresent()) {
+    if (!toldConflict) track('controller_conflict', { other: 'video_speed_controller' });
+    toldConflict = true;
+    return;
+  }
   const m = targetMedia();
   if (!m) {
     // The media may be in another frame of this tab (an embedded player while
@@ -542,6 +571,7 @@ function onKey(e: KeyboardEvent) {
     if (mediaInOtherFrames) {
       e.preventDefault();
       e.stopImmediatePropagation();
+      track('shortcut_relayed');
       try {
         void chrome.runtime.sendMessage({ type: 'speed:relay', code: e.code }).catch(() => {});
       } catch {
@@ -557,7 +587,8 @@ function onKey(e: KeyboardEvent) {
 
 /** Run a shortcut's action and its gradual speed-up effect on `m`. */
 function runShortcut(sc: Shortcut, m: HTMLMediaElement) {
-  run(sc.action, m, sc.value);
+  track('shortcut_used', { action: sc.action, media: m instanceof HTMLVideoElement ? 'video' : 'audio' });
+  run(sc.action, m, sc.value, 'key');
   let label: string | null = null;
   if (sc.action !== 'ramp') {
     label = applyRampEffect(rampEffectOf(sc), m);
@@ -625,9 +656,10 @@ async function joinFrameRelay() {
   }
 }
 
-function announceHasMedia() {
+function announceHasMedia(m?: HTMLMediaElement) {
   if (toldHasMedia) return;
   toldHasMedia = true;
+  track('media_found', { kind: m instanceof HTMLAudioElement ? 'audio' : 'video', frame: window === window.top ? 'top' : 'embedded' });
   try {
     void chrome.runtime.sendMessage({ type: 'speed:has-media' }).catch(() => {});
   } catch {
@@ -636,6 +668,7 @@ function announceHasMedia() {
 }
 
 const vscPresent = () => !!document.querySelector('.vsc-controller');
+let toldConflict = false;
 
 // ---------- overlay ----------
 
@@ -751,13 +784,14 @@ class Controller {
     const step = (dir: 1 | -1) => () => {
       const action = dir > 0 ? 'faster' : 'slower';
       const sc = settings.shortcuts.find((x) => x.action === action);
-      run(action, this.media, sc?.value ?? 0.1);
+      run(action, this.media, sc?.value ?? 0.1, 'overlay_button');
       const label = applyRampEffect(rampEffectOf(sc ?? { action }), this.media);
       if (label) this.flashLabel(label);
     };
     const seek = (dir: 1 | -1) => () => {
       const sc = settings.shortcuts.find((x) => x.action === (dir > 0 ? 'advance' : 'rewind'));
-      run(dir > 0 ? 'advance' : 'rewind', this.media, sc?.value ?? 10);
+      run(dir > 0 ? 'advance' : 'rewind', this.media, sc?.value ?? 10, 'overlay_button');
+      track('overlay_action', { action: dir > 0 ? 'advance' : 'rewind' });
     };
     btns.append(
       btn('«', 'Rewind', seek(-1)),
@@ -765,7 +799,10 @@ class Controller {
       btn('+', 'Faster', step(1)),
       btn('»', 'Advance', seek(1)),
       h('span', 'sep'),
-      btn('✕', 'Hide (press the show/hide key to bring it back)', () => run('display', this.media, 0)),
+      btn('✕', 'Hide (press the show/hide key to bring it back)', () => {
+        track('overlay_action', { action: 'hide' });
+        run('display', this.media, 0, 'overlay_button');
+      }),
     );
     this.ctl.append(this.speed, btns);
     root.append(this.ctl);
@@ -781,7 +818,7 @@ class Controller {
         e.preventDefault();
         e.stopPropagation();
         const delta = e.shiftKey ? 0.25 : 0.05;
-        run(e.deltaY < 0 ? 'faster' : 'slower', this.media, delta);
+        run(e.deltaY < 0 ? 'faster' : 'slower', this.media, delta, 'overlay_wheel');
       },
       { passive: false },
     );
@@ -875,6 +912,7 @@ class Controller {
       this.speed.removeEventListener('pointermove', move);
       this.speed.classList.remove('dragging');
       if (!dragging) this.togglePanel();
+      else track('overlay_moved');
     };
     this.speed.addEventListener('pointermove', move);
     this.speed.addEventListener('pointerup', up, { once: true });
@@ -884,6 +922,7 @@ class Controller {
   private togglePanel() {
     if (!this.panel) this.buildPanel();
     const open = this.panel!.hidden === true;
+    if (open) track('overlay_panel_opened');
     this.panel!.hidden = !open;
     this.ctl.classList.toggle('open', open);
     this.update();
@@ -901,6 +940,8 @@ class Controller {
     slider.addEventListener('input', () => {
       userSetRate(this.media, Number(slider.value));
     });
+    // Count a slider drag once, where it ends.
+    slider.addEventListener('change', () => track('speed_changed', { speed: speedBucket(Number(slider.value)), via: 'overlay_slider' }));
     const input = h('input');
     input.type = 'number';
     input.min = String(MIN_RATE);
@@ -910,7 +951,7 @@ class Controller {
     input.addEventListener('change', () => {
       const v = Number(input.value);
       if (Number.isFinite(v) && v > 0) {
-        userSetRate(this.media, v);
+        userSetRate(this.media, v, 'overlay_input');
       }
     });
     input.addEventListener('keydown', (e) => e.stopPropagation());
@@ -921,7 +962,7 @@ class Controller {
       const c = h('button', 'chip', `${r}×`);
       c.dataset.rate = String(r);
       c.addEventListener('click', () => {
-        userSetRate(this.media, r);
+        userSetRate(this.media, r, 'overlay_chip');
       });
       return c;
     });
@@ -940,7 +981,7 @@ class Controller {
     rampToggle.setAttribute('role', 'switch');
     rampToggle.setAttribute('aria-label', 'Gradual speed-up');
     rampToggle.addEventListener('click', () => {
-      run('ramp', this.media, 0);
+      run('ramp', this.media, 0, 'overlay_panel');
       this.update();
     });
     const rampKey = settings.shortcuts.find((x) => x.action === 'ramp');
@@ -951,7 +992,7 @@ class Controller {
     const holdKey = settings.shortcuts.find((x) => x.action === 'rampHoldVideo' && x.code);
     const hold = h('button', 'chip wide', `Stop for this video${holdKey ? ` (${keyLabel(holdKey.code)})` : ''}`);
     hold.addEventListener('click', () => {
-      run('rampHoldVideo', this.media, 0);
+      run('rampHoldVideo', this.media, 0, 'overlay_panel');
       this.update();
     });
     const pauseRow = h('div', 'ramp-actions');
@@ -959,7 +1000,7 @@ class Controller {
     for (const mins of [5, 10, 30, 60]) {
       const c = h('button', 'chip', mins < 60 ? `${mins}m` : '1h');
       c.addEventListener('click', () => {
-        run('rampPauseFor', this.media, mins);
+        run('rampPauseFor', this.media, mins, 'overlay_panel');
         this.update();
       });
       pauseRow.append(c);
@@ -1013,6 +1054,7 @@ async function start() {
   window.addEventListener('keydown', onKey, true);
 
   INCOGNITO = await isIncognito();
+  setTrackingOff(INCOGNITO);
   const keys = [LAST_SPEED_KEY, RAMP_PAUSED_KEY, SITE_SPEEDS_KEY, RAMP_PAUSED_UNTIL_KEY];
   const [sync, local, own] = await Promise.all([
     chrome.storage.sync.get(SPEED_KEY),

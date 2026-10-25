@@ -2,8 +2,21 @@
 // record, and opens the dashboard.
 import { INCOGNITO_PREFIX, SIMULATE_INCOGNITO_KEY } from './shared/privacy';
 import { DAY_PREFIX, RETENTION_DAYS, SESSION_GAP_MS, dayKey, emptyDay, summarize, type DayStats, type Tick } from './shared/stats';
-import { STORAGE_KEY } from './shared/settings';
-import { localDay, speedBucket, usageCount, usageEvent, usageFlush, usageOnce, usageTurnedOff, usageTurnedOn, usageVersion } from './usage';
+import { STORAGE_KEY, withDefaults, type Settings } from './shared/settings';
+import { DEFAULT_SPEED_SETTINGS, SITE_SPEEDS_KEY, SPEED_KEY, withSpeedDefaults, type SpeedSettings } from './shared/speedSettings';
+import { buildCrash, CLIENT_COUNTERS, countBucket, minutesBucket, ONCE_A_DAY, sanitizeProps, settingValue, speedBucket, validName, type Props } from './shared/usageCore';
+import { localDay, noonOf, usageActive, usageCountMany, usageCrash, usageEvent, usageFlush, usageOnce, usageTurnedOff, usageTurnedOn, usageVersion, type DailyReport } from './usage';
+
+// ---------- errors in the service worker (anonymous, see src/usage.ts) ----------
+const bgCrash = (err: unknown, fatal = false) => {
+  try {
+    void usageCrash(buildCrash('background', err instanceof Error ? err : String(err ?? 'unknown'), chrome.runtime.getURL(''), fatal)).catch(() => {});
+  } catch {
+    // never let error reporting throw
+  }
+};
+self.addEventListener('error', (e) => bgCrash((e as ErrorEvent).error ?? (e as ErrorEvent).message, true));
+self.addEventListener('unhandledrejection', (e) => bgCrash((e as PromiseRejectionEvent).reason));
 
 const STATE_KEY = 'stats:state';
 
@@ -175,17 +188,72 @@ if (!('update_url' in chrome.runtime.getManifest())) (globalThis as Record<strin
 chrome.runtime.onMessage.addListener((msg, sender) => {
   if (msg?.type === 'stats:tick') {
     if (sender.tab?.incognito) return; // never record incognito watching
-    queue = queue.then(() => record(msg as Tick)).catch((err) => console.error('[BetterTube] stats', err));
-  } else if (msg?.type === 'usage:speed') {
-    if (sender.tab?.incognito || typeof msg.rate !== 'number') return;
-    void usageCount('speed_changed', { speed: speedBucket(msg.rate) });
-    void usageOnce('first_speed_change');
+    queue = queue
+      .then(() => record(msg as Tick))
+      .catch((err) => {
+        console.error('[BetterTube] stats', err);
+        bgCrash(err);
+      });
+    markActive('youtube');
+  } else if (msg?.type === 'usage:batch') {
+    if (sender.tab?.incognito || !Array.isArray(msg.items)) return;
+    onClientCounts(msg.items as unknown[], sender);
+  } else if (msg?.type === 'usage:crash') {
+    if (sender.tab?.incognito) return;
+    const c = msg.crash as { fp?: unknown; m?: unknown; st?: unknown; fatal?: unknown } | undefined;
+    if (typeof c?.fp !== 'string' || typeof c.m !== 'string') return;
+    void usageCrash({
+      fp: c.fp.slice(0, 64),
+      m: c.m.slice(0, 500),
+      ...(typeof c.st === 'string' ? { st: c.st.slice(0, 1500) } : {}),
+      t: Date.now(),
+      ...(c.fatal === true ? { fatal: true } : {}),
+    });
   } else if (msg?.type === 'open-dashboard') {
     void chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
   }
 });
 
 chrome.runtime.onStartup.addListener(() => void pruneOldDays());
+
+// ---------- anonymous usage from content scripts and pages (src/shared/track.ts) ----------
+/** First time a feature is used: one setup milestone each. */
+const MILESTONES: Record<string, string> = {
+  popup_opened: 'first_popup_open',
+  speed_changed: 'first_speed_change',
+  shortcut_used: 'first_shortcut_used',
+  ramp_step: 'first_ramp_step',
+  dashboard_opened: 'first_dashboard_open',
+  preset_applied: 'first_preset',
+};
+/** Where a use came from, for "daily_active". */
+const SURFACE_OF = (sender: chrome.runtime.MessageSender) => {
+  if (!sender.tab) return 'popup';
+  const url = sender.url ?? '';
+  if (url.startsWith(chrome.runtime.getURL(''))) return url.includes('dashboard') ? 'dashboard' : 'options';
+  return url.startsWith('https://www.youtube.com/') ? 'youtube' : 'other_site';
+};
+
+let activeMarked = '';
+function markActive(surface: string) {
+  if (activeMarked === localDay()) return;
+  activeMarked = localDay();
+  void usageActive(surface).catch(() => {});
+}
+
+function onClientCounts(raw: unknown[], sender: chrome.runtime.MessageSender) {
+  const items: { n: string; p?: Props; c: number }[] = [];
+  for (const it of raw.slice(0, 100)) {
+    const x = it as { n?: unknown; p?: unknown; c?: unknown };
+    if (!validName(x?.n) || !CLIENT_COUNTERS.has(x.n)) continue;
+    const c = typeof x.c === 'number' && Number.isFinite(x.c) ? Math.min(1000, Math.max(1, Math.round(x.c))) : 1;
+    items.push({ n: x.n, p: sanitizeProps(x.p), c });
+  }
+  if (!items.length) return;
+  markActive(SURFACE_OF(sender));
+  void usageCountMany(items, ONCE_A_DAY).catch(() => {});
+  for (const it of items) if (MILESTONES[it.n]) void usageOnce(MILESTONES[it.n]).catch(() => {});
+}
 chrome.runtime.onInstalled.addListener(() => {
   void pruneOldDays();
   void usageVersion();
@@ -194,6 +262,28 @@ chrome.runtime.onInstalled.addListener(() => {
 // ---------- anonymous usage (src/usage.ts) ----------
 // Feature switches: which one changed and its new value, never anything else in settings.
 const FEATURES = ['classicLayout', 'compactSidebar', 'restoreDescription', 'noBigTheater', 'revertPlayerControls', 'squareCorners', 'hideShorts', 'redirectShorts', 'hideAI', 'hideEndscreen', 'disableHoverPreviews', 'disableAmbient', 'autoplayOff', 'autoContinue', 'hideRelated', 'hideComments', 'antiBuffer', 'statsEnabled', 'statsBadge'];
+/** Choices (not switches): which one changed and the chosen option. */
+const CHOICES = ['viewMode', 'defaultQuality', 'codecMode', 'gridItemsPerRow', 'dailyLimitMinutes'];
+/** Speed controller switches, reported under these names. */
+const SPEED_FEATURES: Record<string, string> = {
+  enabled: 'speedController',
+  rememberSpeed: 'rememberSpeed',
+  perSiteSpeed: 'perSiteSpeed',
+  forceSpeed: 'forceSpeed',
+  workOnAudio: 'workOnAudio',
+  startHidden: 'startHidden',
+  ramp: 'gradualSpeedUp',
+  rampCarryOver: 'rampCarryOver',
+  rampEaseOnRewind: 'rampEaseOnRewind',
+  rampQuiet: 'rampQuiet',
+};
+const SPEED_CHOICES = ['speedDecimals', 'opacity', 'rampStep', 'rampEverySec', 'rampMax', 'rampOnManual', 'rampMinVideoMin', 'rampQuietFrom', 'rampQuietTo'];
+
+const choiceEvent = (setting: string, v: unknown) => {
+  const value = settingValue(v);
+  if (value !== undefined) void usageEvent('setting_changed', { setting, value: String(value) });
+};
+
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'sync' && changes[STORAGE_KEY]) {
     const before = (changes[STORAGE_KEY].oldValue ?? {}) as Record<string, unknown>;
@@ -203,27 +293,151 @@ chrome.storage.onChanged.addListener((changes, area) => {
     for (const f of FEATURES) {
       if (f in before && before[f] !== after[f] && typeof after[f] === 'boolean') void usageEvent('feature_toggled', { feature: f, on: String(after[f]) });
     }
+    for (const f of CHOICES) if (f in before && before[f] !== after[f]) choiceEvent(f, after[f]);
+    // Sizes are dragged on the page: only whether one is set, never the width.
+    for (const f of ['sidebarWidth', 'theaterHeight']) {
+      if (f in before && Boolean(before[f]) !== Boolean(after[f])) choiceEvent(f, after[f] ? 'custom' : 'default');
+    }
   }
-  if (area === 'sync' && changes.speedController) {
-    const b = (changes.speedController.oldValue ?? {}) as { ramp?: boolean };
-    const a = (changes.speedController.newValue ?? {}) as { ramp?: boolean };
-    if (b.ramp !== a.ramp && typeof a.ramp === 'boolean') void usageEvent('feature_toggled', { feature: 'gradualSpeedUp', on: String(a.ramp) });
+  if (area === 'sync' && changes[SPEED_KEY]) {
+    const b = (changes[SPEED_KEY].oldValue ?? {}) as Record<string, unknown>;
+    const a = (changes[SPEED_KEY].newValue ?? {}) as Record<string, unknown>;
+    for (const [k, name] of Object.entries(SPEED_FEATURES)) {
+      if (k in b && b[k] !== a[k] && typeof a[k] === 'boolean') void usageEvent('feature_toggled', { feature: name, on: String(a[k]) });
+    }
+    for (const k of SPEED_CHOICES) if (k in b && b[k] !== a[k]) choiceEvent(k, a[k]);
   }
 });
-const yesterdayTotals = async () => {
+
+const hourPart = (h: number) => (h < 6 ? 'night' : h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening');
+const CODECS = new Set(['AV1', 'VP9', 'H.264']);
+const top = (m: Record<string, number>) => Object.entries(m).sort((x, y) => y[1] - x[1])[0]?.[0];
+
+/** Yesterday as ranges (never per video), then today's settings as switches and choices. */
+const dailyReport: DailyReport = async () => {
+  const out: Awaited<ReturnType<DailyReport>> = [];
   const d = new Date();
   d.setDate(d.getDate() - 1);
-  const day = localDay(d);
+  const t = noonOf(localDay(d));
   const key = `${DAY_PREFIX}${dayKey(d)}`;
   const stats = (await chrome.storage.local.get(key))[key] as DayStats | undefined;
   const sum = summarize(stats);
-  return { day, minutesSaved: Math.round(sum.savedMs / 60_000), videos: sum.videos };
+  const minutesSaved = Math.round(sum.savedMs / 60_000);
+  if (minutesSaved) out.push({ n: 'minutes_saved', t, c: minutesSaved });
+  if (sum.videos) out.push({ n: 'videos_watched', t, c: sum.videos });
+  if (stats && (stats.watchMs > 0 || stats.activeMs > 0)) {
+    const vids = Object.values(stats.videos);
+    const vidWatchMs = vids.reduce((a, v) => a + v.watchMs, 0);
+    const res = top(stats.resolutionMs);
+    const codec = top(stats.codecMs);
+    const peak = stats.hourlyWatchMs.indexOf(Math.max(...stats.hourlyWatchMs));
+    out.push({
+      n: 'day_summary',
+      t,
+      p: {
+        watch: minutesBucket(stats.watchMs / 60_000),
+        active: minutesBucket(stats.activeMs / 60_000),
+        sessions: countBucket(stats.sessions),
+        longest: minutesBucket(stats.longestSessionMs / 60_000),
+        avg_speed: vidWatchMs > 0 ? speedBucket((stats.contentSec * 1000) / vidWatchMs) : 'none',
+        completed: countBucket(vids.filter((v) => v.durationSec > 0 && v.maxPosSec >= v.durationSec * 0.9).length),
+        resolution: res && /^\d{3,4}p$/.test(res) ? res : 'none',
+        codec: codec ? (CODECS.has(codec) ? codec : 'other') : 'none',
+      },
+    });
+    out.push({
+      n: 'day_quality',
+      t,
+      p: {
+        ads: minutesBucket(stats.adMs / 60_000),
+        stalls: countBucket(stats.stalls),
+        peak: stats.watchMs > 0 ? hourPart(peak) : 'none',
+        dropped_pct: stats.totalFrames > 0 ? Math.round((stats.droppedFrames / stats.totalFrames) * 1000) / 10 : 0,
+      },
+    });
+    if (stats.searches) out.push({ n: 'searches', t, c: stats.searches });
+  }
+
+  const sync = await chrome.storage.sync.get([STORAGE_KEY, SPEED_KEY]);
+  const s: Settings = withDefaults(sync[STORAGE_KEY] as Partial<Settings> | undefined);
+  const sp: SpeedSettings = withSpeedDefaults(sync[SPEED_KEY] as Partial<SpeedSettings> | undefined);
+  const siteSpeeds = ((await chrome.storage.local.get(SITE_SPEEDS_KEY))[SITE_SPEEDS_KEY] ?? {}) as Record<string, number>;
+  const now = Date.now();
+  const snap = (n: string, p: Record<string, unknown>) => {
+    const clean: Props = {};
+    for (const [k, v] of Object.entries(p)) {
+      const value = settingValue(v);
+      if (value !== undefined) clean[k] = value;
+    }
+    out.push({ n, t: now, p: clean });
+  };
+  snap('settings_layout', {
+    view_mode: s.viewMode,
+    classic: s.classicLayout,
+    compact_sidebar: s.compactSidebar,
+    description: s.restoreDescription,
+    no_big_theater: s.noBigTheater,
+    old_controls: s.revertPlayerControls,
+    square_corners: s.squareCorners,
+    sidebar: s.sidebarWidth ? 'custom' : 'default',
+  });
+  snap('settings_declutter', {
+    hide_shorts: s.hideShorts,
+    redirect_shorts: s.redirectShorts,
+    hide_ai: s.hideAI,
+    hide_endscreen: s.hideEndscreen,
+    no_previews: s.disableHoverPreviews,
+    no_ambient: s.disableAmbient,
+    autoplay_off: s.autoplayOff,
+    auto_continue: s.autoContinue,
+  });
+  snap('settings_playback', {
+    hide_related: s.hideRelated,
+    hide_comments: s.hideComments,
+    grid_per_row: s.gridItemsPerRow,
+    quality: s.defaultQuality,
+    codec_mode: s.codecMode,
+    anti_buffer: s.antiBuffer,
+    theater_height: s.theaterHeight ? 'custom' : 'default',
+  });
+  snap('settings_stats', { stats: s.statsEnabled, badge: s.statsBadge, daily_limit: s.dailyLimitMinutes });
+  snap('settings_speed', {
+    enabled: sp.enabled,
+    remember: sp.rememberSpeed,
+    per_site: sp.perSiteSpeed,
+    force: sp.forceSpeed,
+    audio: sp.workOnAudio,
+    start_hidden: sp.startHidden,
+    opacity: sp.opacity,
+    decimals: String(sp.speedDecimals),
+  });
+  snap('settings_shortcuts', {
+    count: sp.shortcuts.filter((x) => x.code).length,
+    preferred: sp.shortcuts.filter((x) => x.action === 'preferred' && x.code).length,
+    custom: JSON.stringify(sp.shortcuts) !== JSON.stringify(DEFAULT_SPEED_SETTINGS.shortcuts),
+    sites_off: sp.blacklist.split('\n').filter((l) => l.trim()).length,
+    saved_sites: Object.keys(siteSpeeds).length,
+  });
+  snap('settings_ramp', {
+    on: sp.ramp,
+    step: sp.rampStep,
+    every_sec: sp.rampEverySec,
+    max: sp.rampMax,
+    carry_over: sp.rampCarryOver,
+    on_manual: sp.rampOnManual,
+    min_video_min: sp.rampMinVideoMin,
+    ease_on_rewind: sp.rampEaseOnRewind,
+  });
+  snap('settings_ramp_quiet', { quiet: sp.rampQuiet, from: sp.rampQuietFrom, to: sp.rampQuietTo });
+  return out;
 };
 // First send after 10 minutes (keeps short test runs quiet), then every 6 hours.
 void chrome.alarms.create('usage', { delayInMinutes: 10, periodInMinutes: 360 });
 chrome.alarms.onAlarm.addListener((a) => {
-  if (a.name === 'usage') void usageFlush(yesterdayTotals).catch(() => {});
+  if (a.name === 'usage') void usageFlush(dailyReport).catch(bgCrash);
 });
+// Tests can't wait for the alarm; unpacked builds expose the flush.
+if (!('update_url' in chrome.runtime.getManifest())) (globalThis as Record<string, unknown>).btUsageFlush = () => usageFlush(dailyReport);
 
 // ---------- development: reload automatically after a rebuild ----------
 // Unpacked builds only (no update_url). build.mjs writes build.json on every

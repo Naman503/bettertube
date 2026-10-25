@@ -6,6 +6,7 @@
 // saved preference), so a single check is not enough: for the first seconds of
 // each video we watch the mode and correct it, until the user toggles it
 // themselves.
+import { track } from '../../shared/track';
 import type { ViewMode } from '../../shared/settings';
 import { $, getCookie, setCookie, waitFor } from '../dom';
 import type { Check, Module } from '../types';
@@ -102,6 +103,7 @@ function enforce(mode: ViewMode) {
   trace(`${lastAction} · signals ${JSON.stringify(theaterSignals(flexy))}`);
   if (button) button.click();
   else pressT();
+  track('view_corrected', { to: want ? 'theater' : 'normal', how: button ? 'button' : 'key' });
 }
 
 function stopGuard() {
@@ -142,7 +144,11 @@ export const viewMode: Module = {
     // double-clicking the video) means you want that view for this video:
     // stop correcting until the next video.
     const userChose = (why: string) => {
-      if (!guard.userToggled) trace(`you chose a view (${why}); not correcting this video`);
+      if (!guard.userToggled) {
+        trace(`you chose a view (${why}); not correcting this video`);
+        const how = why.startsWith('"') ? 'key' : why.replace(/[^a-z]+/g, '_');
+        track('view_user_changed', { how });
+      }
       guard.userToggled = true;
     };
     document.addEventListener(
