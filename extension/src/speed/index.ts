@@ -195,6 +195,8 @@ function userSetRate(m: HTMLMediaElement, rate: number) {
   setRate(m, rate);
   rememberSpeed(round(clamp(rate)));
   onManualChange(m);
+  // Anonymous usage: the background keeps only a speed range (incognito is dropped there).
+  void chrome.runtime.sendMessage({ type: 'usage:speed', rate: round(clamp(rate)) }).catch(() => {});
 }
 
 // ---------- gradual speed-up ----------

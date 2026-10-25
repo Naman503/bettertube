@@ -1,7 +1,9 @@
 // Service worker: merges stats ticks from every YouTube tab into the day's
 // record, and opens the dashboard.
 import { INCOGNITO_PREFIX, SIMULATE_INCOGNITO_KEY } from './shared/privacy';
-import { DAY_PREFIX, RETENTION_DAYS, SESSION_GAP_MS, dayKey, emptyDay, type DayStats, type Tick } from './shared/stats';
+import { DAY_PREFIX, RETENTION_DAYS, SESSION_GAP_MS, dayKey, emptyDay, summarize, type DayStats, type Tick } from './shared/stats';
+import { STORAGE_KEY } from './shared/settings';
+import { localDay, speedBucket, usageCount, usageEvent, usageFlush, usageOnce, usageTurnedOff, usageTurnedOn, usageVersion } from './usage';
 
 const STATE_KEY = 'stats:state';
 
@@ -174,13 +176,54 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
   if (msg?.type === 'stats:tick') {
     if (sender.tab?.incognito) return; // never record incognito watching
     queue = queue.then(() => record(msg as Tick)).catch((err) => console.error('[BetterTube] stats', err));
+  } else if (msg?.type === 'usage:speed') {
+    if (sender.tab?.incognito || typeof msg.rate !== 'number') return;
+    void usageCount('speed_changed', { speed: speedBucket(msg.rate) });
+    void usageOnce('first_speed_change');
   } else if (msg?.type === 'open-dashboard') {
     void chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
   }
 });
 
 chrome.runtime.onStartup.addListener(() => void pruneOldDays());
-chrome.runtime.onInstalled.addListener(() => void pruneOldDays());
+chrome.runtime.onInstalled.addListener(() => {
+  void pruneOldDays();
+  void usageVersion();
+});
+
+// ---------- anonymous usage (src/usage.ts) ----------
+// Feature switches: which one changed and its new value, never anything else in settings.
+const FEATURES = ['classicLayout', 'compactSidebar', 'restoreDescription', 'noBigTheater', 'revertPlayerControls', 'squareCorners', 'hideShorts', 'redirectShorts', 'hideAI', 'hideEndscreen', 'disableHoverPreviews', 'disableAmbient', 'autoplayOff', 'autoContinue', 'hideRelated', 'hideComments', 'antiBuffer', 'statsEnabled', 'statsBadge'];
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'sync' && changes[STORAGE_KEY]) {
+    const before = (changes[STORAGE_KEY].oldValue ?? {}) as Record<string, unknown>;
+    const after = (changes[STORAGE_KEY].newValue ?? {}) as Record<string, unknown>;
+    if (before.shareUsage !== false && after.shareUsage === false) void usageTurnedOff();
+    else if (before.shareUsage === false && after.shareUsage !== false) void usageTurnedOn();
+    for (const f of FEATURES) {
+      if (f in before && before[f] !== after[f] && typeof after[f] === 'boolean') void usageEvent('feature_toggled', { feature: f, on: String(after[f]) });
+    }
+  }
+  if (area === 'sync' && changes.speedController) {
+    const b = (changes.speedController.oldValue ?? {}) as { ramp?: boolean };
+    const a = (changes.speedController.newValue ?? {}) as { ramp?: boolean };
+    if (b.ramp !== a.ramp && typeof a.ramp === 'boolean') void usageEvent('feature_toggled', { feature: 'gradualSpeedUp', on: String(a.ramp) });
+  }
+});
+const yesterdayTotals = async () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  const day = localDay(d);
+  const key = `${DAY_PREFIX}${dayKey(d)}`;
+  const stats = (await chrome.storage.local.get(key))[key] as DayStats | undefined;
+  const sum = summarize(stats);
+  return { day, minutesSaved: Math.round(sum.savedMs / 60_000), videos: sum.videos };
+};
+// First send after 10 minutes (keeps short test runs quiet), then every 6 hours.
+void chrome.alarms.create('usage', { delayInMinutes: 10, periodInMinutes: 360 });
+chrome.alarms.onAlarm.addListener((a) => {
+  if (a.name === 'usage') void usageFlush(yesterdayTotals).catch(() => {});
+});
 
 // ---------- development: reload automatically after a rebuild ----------
 // Unpacked builds only (no update_url). build.mjs writes build.json on every

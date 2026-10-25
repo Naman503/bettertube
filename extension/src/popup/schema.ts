@@ -153,7 +153,13 @@ export const SECTIONS: Section[] = [
   {
     title: 'Watch stats',
     fields: [
-      { key: 'statsEnabled', label: 'Track watch time and videos', hint: 'Stored only in this browser', type: 'toggle' },
+      { key: 'statsEnabled', label: 'Track watch time and videos', hint: 'Kept in this browser; only daily totals go into anonymous usage', type: 'toggle' },
+      {
+        key: 'shareUsage',
+        label: 'Share anonymous usage',
+        hint: 'Feature use, speed ranges, minutes saved and videos watched per day, with a random id. Never videos, titles, channels, sites or incognito. Turning it off deletes what was sent.',
+        type: 'toggle',
+      },
       { key: 'statsBadge', label: "Show today's numbers in YouTube's top bar", type: 'toggle' },
       {
         key: 'dailyLimitMinutes',

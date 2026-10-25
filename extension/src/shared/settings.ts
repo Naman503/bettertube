@@ -37,6 +37,8 @@ export interface Settings {
   statsEnabled: boolean;
   statsBadge: boolean;
   dailyLimitMinutes: number; // 0 = no limit
+  /** Anonymous usage reporting (src/usage.ts); on by default. */
+  shareUsage: boolean;
   chip: string; // GPU renderer string detected by the popup, e.g. "Apple M1 Pro"
 }
 
@@ -67,6 +69,7 @@ export const DEFAULTS: Settings = {
   statsEnabled: true,
   statsBadge: true,
   dailyLimitMinutes: 0,
+  shareUsage: true,
   chip: '',
 };
 
