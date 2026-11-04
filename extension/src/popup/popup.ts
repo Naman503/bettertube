@@ -23,6 +23,7 @@ import {
   type SpeedDecimals,
   type SpeedSettings,
 } from '../shared/speedSettings';
+import { LIMIT_ICONS, limitStatus } from '../shared/limit';
 import { DAY_PREFIX, dayKey, fmtDuration, summarize, type DayStats } from '../shared/stats';
 import { SECTIONS, type Field } from './schema';
 import { flushTrack, installErrorCapture, setTrackDelay, setTrackingOff, track } from '../shared/track';
@@ -266,14 +267,20 @@ async function renderToday() {
   $('stat-videos').textContent = String(s.videos);
   $('stat-active').textContent = fmtDuration(s.activeMs);
   $('stat-saved').textContent = fmtDuration(s.savedMs);
-  const limitMs = settings.dailyLimitMinutes * 60_000;
-  $('limit').hidden = !limitMs;
-  if (limitMs) {
-    const ratio = s.watchMs / limitMs;
-    const fill = $('limit-fill');
-    fill.style.width = `${Math.min(100, ratio * 100)}%`;
-    fill.style.background = ratio >= 1 ? 'var(--fail)' : ratio >= 0.8 ? 'var(--warn)' : 'var(--ok)';
-    $('limit-text').textContent = `${ratio >= 1 ? '✕ Over' : ratio >= 0.8 ? '▲ Close to' : '● Within'} your ${fmtDuration(limitMs)} daily limit · ${Math.round(ratio * 100)}%`;
+  const limit = limitStatus(s.watchMs, settings.dailyLimitMinutes);
+  $('limit').hidden = limit.level === 'none';
+  $('limit').dataset.level = limit.level;
+  document.querySelector('.card.today')?.setAttribute('data-limit', limit.level);
+  if (limit.level !== 'none') {
+    $('limit-fill').style.width = `${Math.min(100, limit.ratio * 100)}%`;
+    const glyph = icon('limit');
+    glyph.replaceChildren();
+    for (const d of LIMIT_ICONS[limit.level]) {
+      const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p.setAttribute('d', d);
+      glyph.append(p);
+    }
+    $('limit-text').replaceChildren(glyph, el('b', {}, limit.headline), el('span', {}, ` · ${limit.detail}`));
   }
 }
 

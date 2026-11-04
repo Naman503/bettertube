@@ -175,6 +175,12 @@ export const SECTIONS: Section[] = [
           [240, '4 hours'],
         ],
       },
+      {
+        key: 'dailyLimitPrompt',
+        label: 'Pop up when I go over the limit',
+        hint: "On YouTube: pauses the video and asks. 'Okay for today' stops it until tomorrow",
+        type: 'toggle',
+      },
     ],
   },
 ];

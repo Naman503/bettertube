@@ -108,7 +108,17 @@ main[hidden] { display: none; }
 .limit { margin-top: 8px; }
 .limit-bar { height: 6px; border-radius: 3px; background: var(--field); overflow: hidden; }
 .limit-fill { height: 100%; border-radius: 3px; background: var(--ok); }
-.limit-text { margin-top: 4px; font-size: 11.5px; color: var(--muted); }
+.limit-text { display: flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 11.5px; color: var(--muted); }
+.limit-text svg { width: 14px; height: 14px; flex: none; }
+.limit-text b { font-weight: 600; }
+.limit[data-level="ok"] .limit-text svg { color: var(--ok); }
+.limit[data-level="near"] .limit-fill { background: var(--warn); }
+.limit[data-level="near"] .limit-text { color: var(--warn); }
+.limit[data-level="over"] .limit-fill { background: var(--fail); }
+.limit[data-level="over"] .limit-text { margin-top: 8px; padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, var(--fail) 12%, transparent); color: var(--fail); font-size: 12px; }
+.limit[data-level="over"] .limit-text span { color: var(--muted); }
+.card.today[data-limit="over"] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fail) 55%, transparent); }
+.card.today[data-limit="over"] .hero { color: var(--fail); }
 .today-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0; }
 .today-grid div { background: var(--field); border-radius: 8px; padding: 8px 10px; }
 .today-grid dt { color: var(--muted); font-size: 11px; }
