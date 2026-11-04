@@ -2,6 +2,7 @@
 // numbers in a badge in YouTube's top bar (click it for the full dashboard).
 import { track } from '../../shared/track';
 import { onIsolatedMessage, type PlayerStats } from '../../shared/bridge';
+import { LIMIT_ICONS, limitStatus } from '../../shared/limit';
 import { DAY_PREFIX, dayKey, fmtDuration, summarize, type DayStats, type Tick } from '../../shared/stats';
 import { $, alive, mainVideo, waitFor } from '../dom';
 import type { Ctx, Module } from '../types';
@@ -189,11 +190,18 @@ function buildBadge() {
   badgeParts.time = document.createElement('b');
   time.append(icon(CLOCK_ICON), badgeParts.time);
 
+  // Over the daily limit: a red pill with an hourglass and how far over.
+  const over = document.createElement('span');
+  over.className = 'bt-over';
+  badgeParts.overText = document.createElement('b');
+  over.append(icon(LIMIT_ICONS.over), badgeParts.overText);
+  badgeParts.over = over;
+
   const card = document.createElement('div');
   card.className = 'bt-stats-card';
   badgeParts.card = card;
 
-  root.append(videos, time, card);
+  root.append(videos, time, over, card);
   const open = () => {
     if (!alive()) return;
     track('dashboard_opened', { from: 'badge' });
@@ -240,14 +248,16 @@ async function renderBadge() {
     return; // extension reloaded mid-call
   }
   const s = summarize(day);
-  const limitMs = ctxRef.settings.dailyLimitMinutes * 60_000;
+  const limit = limitStatus(s.watchMs, ctxRef.settings.dailyLimitMinutes);
   badgeParts.videos.textContent = String(s.videos);
   badgeParts.time.textContent = fmtDuration(s.watchMs);
-  const ratio = limitMs ? s.watchMs / limitMs : 0;
-  badge.dataset.level = !limitMs ? 'none' : ratio >= 1 ? 'over' : ratio >= 0.8 ? 'near' : 'ok';
-  if (badge.dataset.level === 'over') track('daily_limit_reached');
-  badge.style.setProperty('--bt-limit', `${Math.min(1, ratio) * 100}%`);
-  badge.title = '';
+  badge.dataset.level = limit.level;
+  if (limit.level === 'over') track('daily_limit_reached');
+  const overMs = s.watchMs - limit.limitMs;
+  badgeParts.overText.textContent = overMs >= 60_000 ? `+${fmtDuration(overMs)}` : 'Limit';
+  badge.style.setProperty('--bt-limit', `${Math.min(1, limit.ratio) * 100}%`);
+  badge.title = limit.level === 'over' ? limit.headline : '';
+  badge.setAttribute('aria-label', `Today's YouTube stats${limit.level === 'over' ? `. ${limit.headline}` : ''}. Open dashboard`);
 
   const title = document.createElement('div');
   title.className = 'bt-card-title';
@@ -259,7 +269,17 @@ async function renderBadge() {
     cardRow('Saved by speed', fmtDuration(s.savedMs)),
     cardRow('Ads', fmtDuration(s.adMs)),
   ];
-  if (limitMs) rows.push(cardRow('Daily limit', `${Math.round(ratio * 100)}% of ${fmtDuration(limitMs)}`));
+  if (limit.level !== 'none') {
+    const row = cardRow('Daily limit', limit.detail);
+    row.dataset.level = limit.level;
+    rows.push(row);
+    if (limit.level === 'over') {
+      const alert = document.createElement('div');
+      alert.className = 'bt-card-alert';
+      alert.append(icon(LIMIT_ICONS.over), limit.headline);
+      rows.unshift(alert);
+    }
+  }
   const hint = document.createElement('div');
   hint.className = 'bt-card-hint';
   hint.textContent = 'Click for the full dashboard';
@@ -303,7 +323,21 @@ export const stats: Module = {
 #bt-stats-badge[data-level="ok"] { --bt-limit-color: #0ca30c; }
 #bt-stats-badge[data-level="near"] { --bt-limit-color: #fab219; }
 #bt-stats-badge[data-level="over"] { --bt-limit-color: #d03b3b; }
+#bt-stats-badge .bt-over { display: none; }
+#bt-stats-badge[data-level="over"] { background: rgba(208,59,59,.14); box-shadow: inset 0 0 0 1px rgba(208,59,59,.55); }
+#bt-stats-badge[data-level="over"]:hover { background: rgba(208,59,59,.22); }
 #bt-stats-badge[data-level="over"] .bt-stat:last-of-type svg { color: #d03b3b; }
+#bt-stats-badge[data-level="over"] .bt-over {
+  display: inline-flex; align-items: center; gap: 4px; height: 22px; margin-right: -4px; padding: 0 8px 0 6px;
+  border-radius: 11px; background: #d03b3b; color: #fff; font-size: 1.25rem;
+}
+#bt-stats-badge .bt-over svg { width: 14px; height: 14px; color: #fff; }
+.bt-stats-card .bt-card-alert {
+  display: flex; align-items: center; gap: 6px; margin: -2px 0 8px; padding: 6px 8px; border-radius: 8px;
+  background: rgba(208,59,59,.14); color: #d03b3b; font-weight: 500;
+}
+.bt-stats-card .bt-card-alert svg { width: 16px; height: 16px; flex: none; }
+.bt-stats-card .bt-card-row[data-level="over"] b { color: #d03b3b; }
 #bt-stats-badge .bt-stats-card {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 3000; min-width: 230px;
   padding: 12px 14px; border-radius: 12px; cursor: default;

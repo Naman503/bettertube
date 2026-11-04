@@ -13,6 +13,7 @@ import { description } from './modules/description';
 import { playerSize } from './modules/playerSize';
 import { shorts } from './modules/shorts';
 import { sidebarFix } from './modules/sidebarFix';
+import { limitPrompt } from './modules/limitPrompt';
 import { stats } from './modules/stats';
 import { viewMode } from './modules/viewMode';
 import type { Ctx, Module, PageInfo } from './types';
@@ -21,7 +22,7 @@ import type { Ctx, Module, PageInfo } from './types';
 setTrackingOff(true);
 installErrorCapture('youtube', ['content.js', 'main.js']);
 
-const modules: Module[] = [viewMode, classicLayout, density, playerSize, sidebarFix, description, shorts, declutter, stats];
+const modules: Module[] = [viewMode, classicLayout, density, playerSize, sidebarFix, description, shorts, declutter, stats, limitPrompt];
 
 function readPage(): PageInfo {
   const isWatch = location.pathname === '/watch';

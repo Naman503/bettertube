@@ -4,6 +4,15 @@ All notable changes to BetterTube. Versions follow [Semantic Versioning](https:/
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-11-04
+
+### Added
+- **Daily limit pop-up.** Going over your daily limit pauses the video and asks: **Okay for today** (quiet until tomorrow), **Remind me in 15 min** (`Esc` too), or **Stop watching** (closes the tab). Answering in one tab closes it in the others. Switch: Popup → YouTube → Watch stats → "Pop up when I go over the limit" (on by default).
+- **Set the daily limit to any time, to the minute** (1 min – 24 h): an on/off switch, hours and minutes boxes (typing 95 minutes becomes 1h 35m), −5 / +5 buttons, and quick picks (15m to 4h). Replaces the fixed list.
+
+### Changed
+- **Over the limit is now hard to miss:** the top-bar badge turns red with an hourglass pill (`+15m`), and its card leads with "Over your daily limit by 15m". The popup and dashboard show the same in red with an hourglass, instead of a small grey line. Under the limit they show time left.
+
 ## [0.6.0] — 2026-10-26
 
 ### Added

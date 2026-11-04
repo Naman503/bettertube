@@ -123,7 +123,8 @@ The speed climbs while you watch, measured in real playback time, so pauses and 
 
 ### Watch stats
 
-- **Top-bar badge:** today's videos and watch time in YouTube's top bar. Hover for details, click for the dashboard. An optional daily limit fills a progress line.
+- **Top-bar badge:** today's videos and watch time in YouTube's top bar. Hover for details, click for the dashboard. An optional daily limit fills a progress line, and the badge turns red with an hourglass and how far over (`+15m`) once you pass it.
+- **Daily limit pop-up:** when you go over, the video pauses and BetterTube asks: **Okay for today** (no more pop-ups until tomorrow), **Remind me in 15 min**, or **Stop watching** (closes the tab). It can be switched off under **Popup → YouTube → Watch stats**, where the limit itself can be set to any time from 1 minute to 24 hours.
 - **Dashboard:**
   - watch time, videos and time on YouTube;
   - **time saved by speed** (video covered − real time, with the math shown);
@@ -209,6 +210,7 @@ More end-to-end suites (Playwright, local test media generated with ffmpeg):
 | `tests/stats-ramp.mjs`, `tests/stats-seek.mjs` | Saved-by-speed vs ground truth; jumps not counted |
 | `tests/user-layout-sim.mjs` | Recreates the signed-in 2026 side-rail layout via its flags and checks the fix |
 | `tests/popup-amounts.mjs` | Free-entry fields in the popup |
+| `tests/daily-limit.mjs` | Over-limit pop-up (snooze, okay for today, stop watching, off switch) and the red badge, popup and dashboard states |
 | `tests/netflix.mjs` | Netflix (no black screen, seeks via its player), the per-site off switch, videos played before being attached |
 | `tests/incognito.mjs` | Incognito: no stats, separate session-only speeds, wiped on close (uses an unpacked-only simulation flag) |
 

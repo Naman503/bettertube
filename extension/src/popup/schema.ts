@@ -13,7 +13,9 @@ interface Base {
 export type Field =
   | (Base & { type: 'toggle' })
   | (Base & { type: 'select'; options: [value: string | number, label: string][] })
-  | (Base & { type: 'range'; min: number; max: number; step: number; unit: string; zeroLabel: string });
+  | (Base & { type: 'range'; min: number; max: number; step: number; unit: string; zeroLabel: string })
+  /** Minutes, any value from 1 to max; 0 = off. Typed as hours + minutes, with quick picks. */
+  | (Base & { type: 'duration'; max: number; fallback: number; presets: number[] });
 
 export interface Section {
   title: string;
@@ -163,17 +165,18 @@ export const SECTIONS: Section[] = [
       { key: 'statsBadge', label: "Show today's numbers in YouTube's top bar", type: 'toggle' },
       {
         key: 'dailyLimitMinutes',
-        label: 'Daily watch goal / limit',
-        type: 'select',
-        options: [
-          [0, 'None'],
-          [30, '30 min'],
-          [60, '1 hour'],
-          [90, '1.5 hours'],
-          [120, '2 hours'],
-          [180, '3 hours'],
-          [240, '4 hours'],
-        ],
+        label: 'Daily watch limit',
+        hint: 'any time from 1 minute to 24 hours',
+        type: 'duration',
+        max: 24 * 60,
+        fallback: 90,
+        presets: [15, 30, 45, 60, 90, 120, 180, 240],
+      },
+      {
+        key: 'dailyLimitPrompt',
+        label: 'Pop up when I go over the limit',
+        hint: "On YouTube: pauses the video and asks. 'Okay for today' stops it until tomorrow",
+        type: 'toggle',
       },
     ],
   },
