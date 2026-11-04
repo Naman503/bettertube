@@ -375,6 +375,7 @@ function renderField(f: Field): HTMLElement {
       }),
     );
   }
+  if (f.type === 'duration') return durationField(f, text, row);
   if (f.type === 'range') {
     const value = Number(settings[f.key]);
     const input = el('input', { type: 'range', min: String(f.min), max: String(f.max), step: String(f.step) });
@@ -409,6 +410,99 @@ function renderField(f: Field): HTMLElement {
     void saveSettings({ [f.key]: raw }).then(renderQuick);
   });
   return row(select);
+}
+
+/** "1h 30m", "45m", "2h". */
+const fmtMinutes = (min: number) => {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return h && m ? `${h}h ${m}m` : h ? `${h}h` : `${m}m`;
+};
+
+/** Daily limit: switch, hours + minutes boxes, ∓5 min buttons and quick picks. */
+function durationField(f: Extract<Field, { type: 'duration' }>, text: HTMLElement, row: (c?: HTMLElement) => HTMLElement) {
+  let value = Number(settings[f.key]) || 0;
+  let last = value || f.fallback; // brought back when switched on again
+  const save = (v: number) => {
+    value = v;
+    if (v) last = v;
+    void saveSettings({ [f.key]: v }).then(renderQuick);
+    paint();
+  };
+
+  const box = (label: string, max: number) => {
+    const input = el('input', { type: 'number', className: 'amount-input dur-input', inputMode: 'numeric', min: '0', max: String(max), step: '1' });
+    input.setAttribute('aria-label', label);
+    return input;
+  };
+  const hours = box(`${f.label}: hours`, Math.floor(f.max / 60));
+  const minutes = box(`${f.label}: minutes`, f.max); // 90 here is fine: shown back as 1h 30m
+  const error = el('p', { className: 'amount-error', hidden: true }, `Enter 1 minute to ${fmtMinutes(f.max)}`);
+  // "1h 30m a day · Any time from 1 minute to 24 hours"
+  const readout = text.querySelector<HTMLElement>('.hint') ?? text.appendChild(el('p', { className: 'hint' }));
+  const commit = () => {
+    const h = hours.value.trim() === '' ? 0 : Number(hours.value);
+    const m = minutes.value.trim() === '' ? 0 : Number(minutes.value);
+    // Typing 90 in minutes means 1h 30m.
+    const total = Math.round(h * 60 + m);
+    const ok = Number.isFinite(total) && h >= 0 && m >= 0 && total >= 1 && total <= f.max;
+    error.hidden = ok;
+    hours.classList.toggle('invalid', !ok);
+    minutes.classList.toggle('invalid', !ok);
+    if (ok) save(total);
+  };
+  for (const input of [hours, minutes]) {
+    input.addEventListener('change', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') commit();
+    });
+  }
+  const step = (d: number) => {
+    const b = el('button', { className: 'dur-step', title: `${d > 0 ? 'Add' : 'Take off'} 5 minutes` }, d > 0 ? '+5' : '−5');
+    b.addEventListener('click', () => save(Math.min(f.max, Math.max(1, (value || last) + d))));
+    return b;
+  };
+  const chips = el('div', { className: 'amount-chips' });
+  const editor = el(
+    'div',
+    { className: 'amount dur' },
+    el(
+      'div',
+      { className: 'amount-row dur-row' },
+      step(-5),
+      hours,
+      el('span', { className: 'amount-unit' }, 'h'),
+      minutes,
+      el('span', { className: 'amount-unit' }, 'm'),
+      step(5),
+    ),
+    error,
+    chips,
+  );
+  const toggle = switchControl(f.label, value > 0, (on) => save(on ? last : 0));
+
+  function paint() {
+    editor.hidden = !value;
+    const v = value || last;
+    hours.value = String(Math.floor(v / 60));
+    minutes.value = String(v % 60);
+    error.hidden = true;
+    hours.classList.remove('invalid');
+    minutes.classList.remove('invalid');
+    readout.textContent = value ? `${fmtMinutes(value)} a day · ${f.hint ?? ''}` : 'Off';
+    chips.replaceChildren(
+      ...f.presets.map((p) => {
+        const c = el('button', { className: `chip${p === value ? ' on' : ''}` }, fmtMinutes(p));
+        c.addEventListener('click', () => save(p));
+        return c;
+      }),
+    );
+  }
+  paint();
+  text.append(editor);
+  const r = row(toggle);
+  r.classList.add('dur-field');
+  return r;
 }
 
 function renderSections() {

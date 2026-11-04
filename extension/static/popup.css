@@ -270,3 +270,13 @@ textarea {
 .site-row b { font-variant-numeric: tabular-nums; }
 .site-row .del { border: 0; background: none; color: var(--faint); border-radius: 6px; height: 24px; }
 .site-row .del:hover { color: var(--fail); background: var(--field); }
+
+/* Daily limit: hours + minutes */
+.dur-field { align-items: flex-start; }
+.dur-row { flex-wrap: wrap; }
+.amount-input.dur-input { width: 56px; text-align: center; }
+.dur-step {
+  border: 1px solid var(--line); background: var(--card); border-radius: 8px; height: 32px; min-width: 38px;
+  padding: 0 8px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--fg);
+}
+.dur-step:hover { border-color: var(--faint); }

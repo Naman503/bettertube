@@ -124,7 +124,7 @@ The speed climbs while you watch, measured in real playback time, so pauses and 
 ### Watch stats
 
 - **Top-bar badge:** today's videos and watch time in YouTube's top bar. Hover for details, click for the dashboard. An optional daily limit fills a progress line, and the badge turns red with an hourglass and how far over (`+15m`) once you pass it.
-- **Daily limit pop-up:** when you go over, the video pauses and BetterTube asks: **Okay for today** (no more pop-ups until tomorrow), **Remind me in 15 min**, or **Stop watching** (closes the tab). It can be switched off under **Popup → YouTube → Watch stats**.
+- **Daily limit pop-up:** when you go over, the video pauses and BetterTube asks: **Okay for today** (no more pop-ups until tomorrow), **Remind me in 15 min**, or **Stop watching** (closes the tab). It can be switched off under **Popup → YouTube → Watch stats**, where the limit itself can be set to any time from 1 minute to 24 hours.
 - **Dashboard:**
   - watch time, videos and time on YouTube;
   - **time saved by speed** (video covered − real time, with the math shown);
