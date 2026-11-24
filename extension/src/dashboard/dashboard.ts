@@ -1,3 +1,4 @@
+import { LIMIT_ICONS, limitStatus } from '../shared/limit';
 import { STORAGE_KEY, withDefaults, type Settings } from '../shared/settings';
 import { installErrorCapture, track } from '../shared/track';
 
@@ -218,17 +219,23 @@ function renderTiles(a: ReturnType<typeof aggregate>, dates: string[]) {
   const n = dates.length;
   const hero = tile('Watch time', fmtDuration(t.watchMs), n > 1 ? `${fmtDuration(t.watchMs / n)} a day on average` : 'videos actually playing', 'hero');
 
-  const limitMs = settings.dailyLimitMinutes * 60_000;
-  if (range === 'today' && limitMs) {
-    const ratio = t.watchMs / limitMs;
-    const [color, text] =
-      ratio >= 1 ? ['var(--critical)', '✕ Over your daily limit'] : ratio >= 0.8 ? ['var(--warning)', '▲ Close to your daily limit'] : ['var(--good)', '● Within your daily limit'];
+  const limit = limitStatus(t.watchMs, settings.dailyLimitMinutes);
+  if (range === 'today' && limit.level !== 'none') {
+    hero.classList.add(`limit-${limit.level}`);
+    const glyph = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    glyph.setAttribute('viewBox', '0 0 24 24');
+    glyph.setAttribute('aria-hidden', 'true');
+    for (const d of LIMIT_ICONS[limit.level]) {
+      const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p.setAttribute('d', d);
+      glyph.append(p);
+    }
     hero.append(
       el(
         'div',
-        { class: 'limit' },
-        el('div', { class: 'bar' }, el('div', { class: 'fill', style: `width:${Math.min(100, ratio * 100)}%;background:${color}` })),
-        el('div', { class: 'status' }, `${text} · ${Math.round(ratio * 100)}% of ${fmtDuration(limitMs)}`),
+        { class: `limit ${limit.level}` },
+        el('div', { class: 'bar' }, el('div', { class: 'fill', style: `width:${Math.min(100, limit.ratio * 100)}%` })),
+        el('div', { class: 'status', role: limit.level === 'over' ? 'alert' : 'status' }, glyph, el('b', {}, limit.headline), el('span', {}, limit.detail)),
       ),
     );
   }

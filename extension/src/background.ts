@@ -195,6 +195,9 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
         bgCrash(err);
       });
     markActive('youtube');
+  } else if (msg?.type === 'close-tab') {
+    // "Stop watching" in the daily-limit prompt.
+    if (sender.tab?.id !== undefined) void chrome.tabs.remove(sender.tab.id);
   } else if (msg?.type === 'usage:batch') {
     if (sender.tab?.incognito || !Array.isArray(msg.items)) return;
     onClientCounts(msg.items as unknown[], sender);

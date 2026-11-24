@@ -65,8 +65,23 @@ h3 { margin: 16px 0 6px; font-size: 12px; font-weight: 600; color: var(--text-se
 .limit { margin-top: 10px; }
 .limit .bar { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
 .limit .fill { height: 100%; border-radius: 3px; }
-.limit .status { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12.5px; color: var(--text-secondary); }
-.limit .dot { width: 8px; height: 8px; border-radius: 50%; }
+.limit.ok .fill { background: var(--good); }
+.limit.near .fill { background: var(--warning); }
+.limit.over .fill { background: var(--critical); }
+.limit .status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 8px; font-size: 13px; color: var(--text-secondary); }
+.limit .status svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.limit .status b { font-weight: 600; color: var(--text-primary); }
+.limit .status span { color: var(--text-muted); }
+.limit.ok .status svg { color: var(--good); }
+.limit.near .status svg { color: var(--warning); }
+.limit.over .status {
+  align-self: flex-start; margin-top: 12px; padding: 8px 12px; border-radius: 10px;
+  background: color-mix(in srgb, var(--critical) 14%, transparent); color: var(--critical); font-size: 14px;
+}
+.limit.over .status svg { width: 18px; height: 18px; }
+.limit.over .status b { color: var(--critical); }
+.tile.hero.limit-over { border-color: color-mix(in srgb, var(--critical) 60%, transparent); background: linear-gradient(180deg, color-mix(in srgb, var(--critical) 7%, var(--surface)), var(--surface)); }
+.tile.hero.limit-over .value { color: var(--critical); }
 
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .span-2 { grid-column: span 2; }

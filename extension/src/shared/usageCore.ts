@@ -38,6 +38,7 @@ export const CLIENT_COUNTERS = new Set([
   'description_expanded',
   'description_timestamp',
   'daily_limit_reached',
+  'daily_limit_prompt',
   'module_error',
   // popup / options / dashboard
   'popup_opened',
