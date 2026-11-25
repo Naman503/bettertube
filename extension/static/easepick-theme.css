@@ -1,0 +1,61 @@
+/* easepick (date range calendar) restyled to the dashboard's tokens.
+   Custom properties inherit into its shadow root from the page. */
+:host {
+  --color-bg-default: var(--card);
+  --color-bg-secondary: var(--card-2);
+  --color-fg-default: var(--fg);
+  --color-fg-primary: var(--series-1);
+  --color-fg-secondary: var(--muted-fg);
+  --color-fg-selected: #ffffff;
+  --color-fg-muted: var(--muted-fg);
+  --color-fg-accent: var(--series-1);
+  --color-fg-locked: var(--baseline);
+  --color-bg-locked: transparent;
+  --color-bg-unavailable: transparent;
+  --color-bg-inrange: color-mix(in srgb, var(--series-1) 16%, transparent);
+  --color-bg-tooltip: var(--tooltip-bg);
+  --color-fg-tooltip: var(--tooltip-fg);
+  --color-border-default: var(--border);
+  --color-border-locked: transparent;
+  --color-btn-primary-bg: var(--fg);
+  --color-btn-primary-fg: var(--card);
+  --color-btn-primary-border: var(--fg);
+  --color-btn-primary-hover-bg: var(--fg-2);
+  --color-btn-primary-hover-fg: var(--card);
+  --color-btn-primary-hover-border: var(--fg-2);
+  --color-btn-secondary-bg: transparent;
+  --color-btn-secondary-fg: var(--fg-2);
+  --color-btn-secondary-border: var(--border);
+  --color-btn-secondary-hover-bg: var(--hover);
+  --color-btn-secondary-hover-fg: var(--fg);
+  --color-btn-secondary-hover-border: var(--baseline);
+  --border-radius: 8px;
+  --day-width: 38px;
+  --day-height: 36px;
+}
+.container {
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 13px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+}
+.container.show { box-shadow: var(--shadow-pop); }
+.container > main { background: var(--card); }
+.container > footer, .container > header { background: var(--card-2); border-top: 1px solid var(--border); }
+.calendars .calendar > .header .month-name { font-weight: 600; }
+.calendars .calendar > .header button { border-radius: 8px; color: var(--fg-2); }
+.calendars .calendar > .header button:hover { background: var(--hover); }
+.calendars .calendar > .daynames-row > .dayname { color: var(--muted-fg); font-size: 11.5px; }
+.calendars .calendar > .days-grid > .day { border-radius: 8px; font-variant-numeric: tabular-nums; }
+.calendars .calendar > .days-grid > .day:hover { border-color: var(--baseline); color: var(--fg); }
+.calendars .calendar > .days-grid > .day.today { color: var(--series-1); font-weight: 700; }
+.calendars .calendar > .days-grid > .day.start,
+.calendars .calendar > .days-grid > .day.end { background: var(--series-1) !important; color: #fff !important; }
+.preset-plugin-container { background: var(--card-2); border-right: 1px solid var(--border); padding: 10px 8px; gap: 2px; width: 150px !important; }
+.preset-plugin-container > button {
+  text-align: left; background: transparent; color: var(--fg-2); padding: 7px 10px; border-radius: 8px; font: inherit; font-size: 13px;
+}
+.preset-plugin-container > button:hover { background: var(--hover); color: var(--fg); }
+.preset-plugin-container > button.active { background: var(--fg); color: var(--card); font-weight: 600; }
+.container > footer .footer-buttons > button { border-radius: 8px; padding: 6px 14px; font: inherit; font-size: 13px; font-weight: 500; }
+.range-plugin-tooltip { border-radius: 6px; font-size: 12px; }

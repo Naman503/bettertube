@@ -1,6 +1,6 @@
 {
   "name": "bettertube",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -24,5 +24,10 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/Naman503/bettertube.git"
+  },
+  "dependencies": {
+    "@easepick/bundle": "1.2.1",
+    "@fontsource-variable/inter": "5.2.5",
+    "echarts": "6.1.0"
   }
 }

@@ -59,7 +59,7 @@ BetterTube fixes this at the source: it switches off the experiment flags behind
 </tr>
 </table>
 
-<img src="docs/images/dashboard.png" alt="The stats dashboard: watch time, videos watched, time on YouTube, time saved by speed with its math, completion, sessions, a daily chart, an hour-of-day chart and top channels">
+<img src="docs/images/dashboard.png" alt="The stats dashboard (demo data): date picker, four headline cards with trend lines and changes vs. the previous period, a row of smaller stats, a per-day chart with average line and the previous period dashed, and an activity calendar with a summary">
 
 <sub>Dashboard shown with demo data.</sub>
 
@@ -126,13 +126,15 @@ The speed climbs while you watch, measured in real playback time, so pauses and 
 - **Top-bar badge:** today's videos and watch time in YouTube's top bar. Hover for details, click for the dashboard. An optional daily limit fills a progress line, and the badge turns red with an hourglass and how far over (`+15m`) once you pass it.
 - **Daily limit pop-up:** when you go over, the video pauses and BetterTube asks: **Okay for today** (no more pop-ups until tomorrow), **Remind me in 15 min**, or **Stop watching** (closes the tab). It can be switched off under **Popup → YouTube → Watch stats**, where the limit itself can be set to any time from 1 minute to 24 hours.
 - **Dashboard:**
-  - watch time, videos and time on YouTube;
-  - **time saved by speed** (video covered − real time, with the math shown);
-  - completion, sessions, ads time and searches;
-  - charts by day and by hour, top channels, and habits (streak, peak hour);
+  - **any date range:** presets (today, yesterday, last 7 / 30 / 90 days, this or last month, this year, all time), a custom from–to, and ‹ › to step through periods;
+  - totals compared with the previous period: watch time, videos, **time saved by speed** (video covered − real time), average speed, finished %, time on YouTube, sessions, channels, videos per day, and days over your daily limit;
+  - a per-day (or per-week) trend for watch time, time saved, videos or speed, with average and limit lines;
+  - an activity calendar, a weekday × hour heatmap, and averages by weekday;
+  - the speeds you watch at, video length vs. how often you finish, top channels and top videos;
+  - habits: streaks, busiest day, peak hour, weekend and late-night share;
   - playback health: buffering, dropped frames, connection, resolution and codec mix;
-  - a video log and JSON export.
-- **Accuracy:** checked against ground truth while the speed keeps changing (within 1.5%). Ticks from several open tabs are merged, so time is never counted twice.
+  - a searchable, sortable video log, and JSON export.
+- **Accuracy:** checked against ground truth while the speed keeps changing (within 1.5%). Ticks from several open tabs are merged, so time is never counted twice, and a player that says it's playing but doesn't move (a frozen or forgotten tab) isn't counted.
 
 ### Performance
 
@@ -210,6 +212,8 @@ More end-to-end suites (Playwright, local test media generated with ffmpeg):
 | `tests/stats-ramp.mjs`, `tests/stats-seek.mjs` | Saved-by-speed vs ground truth; jumps not counted |
 | `tests/user-layout-sim.mjs` | Recreates the signed-in 2026 side-rail layout via its flags and checks the fix |
 | `tests/popup-amounts.mjs` | Free-entry fields in the popup |
+| `tests/dashboard.mjs` | Date picker (presets, custom range, ‹ ›), stuck playback left out, trend metrics, heatmaps, video search and sort; `--data` loads an export |
+| `tests/stats-frozen.mjs` | A frozen player isn't counted as watching |
 | `tests/daily-limit.mjs` | Over-limit pop-up (snooze, okay for today, stop watching, off switch) and the red badge, popup and dashboard states |
 | `tests/netflix.mjs` | Netflix (no black screen, seeks via its player), the per-site off switch, videos played before being attached |
 | `tests/incognito.mjs` | Incognito: no stats, separate session-only speeds, wiped on close (uses an unpacked-only simulation flag) |
@@ -239,6 +243,10 @@ Background research and the original plan are in [`docs/`](docs/). The version h
 ## Related
 
 **[PiP Anywhere](https://github.com/Naman503/pip-anywhere):** a macOS floating window that stays on top of full-screen apps, for watching while you work.
+
+## Credits
+
+The dashboard uses [Apache ECharts](https://echarts.apache.org/) (Apache-2.0), [easepick](https://easepick.com/) (MIT) and the [Inter](https://rsms.me/inter/) typeface (OFL), all bundled with the extension. Nothing is loaded from the web.
 
 ## License
 

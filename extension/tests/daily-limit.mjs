@@ -158,11 +158,11 @@ try {
   const dash = await context.newPage();
   dash.on('pageerror', (e) => console.log('  dashboard error:', e.message));
   await dash.goto(`chrome-extension://${extId}/dashboard.html`);
-  await dash.waitForSelector('.tile.hero');
+  await dash.waitForSelector('.kpi');
   await dash.waitForTimeout(500);
-  const d = await dash.evaluate(() => ({ cls: document.querySelector('.tile.hero').className, text: document.querySelector('.tile.hero .status')?.innerText.replace(/\s+/g, ' ') }));
+  const d = await dash.evaluate(() => ({ cls: document.querySelector('.kpi').className, text: document.querySelector('.kpi .status')?.innerText.replace(/\s+/g, ' ') }));
   check('dashboard: hero card flagged with alert and how far over', /limit-over/.test(d.cls) && /Over your daily limit by 15m/.test(d.text) && /117% of 1h 30m/.test(d.text), JSON.stringify(d));
-  if (SHOTS) await dash.locator('.tile.hero').screenshot({ path: `${SHOTS}/limit-dashboard.png` });
+  if (SHOTS) await dash.locator('.kpi').screenshot({ path: `${SHOTS}/limit-dashboard.png` });
   await dash.close();
 
   // Pop-up switched off

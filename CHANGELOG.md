@@ -4,6 +4,27 @@ All notable changes to BetterTube. Versions follow [Semantic Versioning](https:/
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-11-25
+
+### Added
+- **Redesigned dashboard:** cleaner cards, the Inter font, interactive charts (Apache ECharts) with hover details, and small trend lines in the four headline cards. Light and dark follow your system.
+- **Pick any dates on the dashboard:** a date-range calendar (easepick) with presets (today, yesterday, last 7 / 30 / 90 days, this month, last month, this year, all time), any custom from–to range, and ‹ › to step back and forward by the same length.
+- **Compared with the previous period:** watch time, videos, time saved, average speed and time on YouTube show the change (▲ 12% vs previous 30 days).
+- **More analysis:**
+  - a trend chart switchable between watch time, time saved, videos and speed, with average and daily-limit lines, the previous period as a dashed line, and zoom for long ranges (weekly columns past 3 months);
+  - an activity calendar with days watched, best day, average and longest run;
+  - a weekday × hour heatmap;
+  - average watch time by weekday;
+  - the speeds you watch at (donut);
+  - video length: finished vs. not;
+  - top videos;
+  - new tiles (average speed, channels, videos per day, days over the limit);
+  - streaks, weekend and late-night share.
+- **Video log:** search titles and channels, sort by any column.
+
+### Fixed
+- **"Saved by speed" showed 0 on longer ranges.** A video YouTube reported as playing but that never moved (a frozen or forgotten tab) counted as watch time, up to 12 hours a day, which swamped the time saved. Such playback is no longer counted. Already-recorded stuck playback is left out of the dashboard, popup, badge and daily limit, with a note saying how much (nothing is deleted).
+
 ## [0.7.0] — 2026-11-04
 
 ### Added
