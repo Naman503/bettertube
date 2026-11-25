@@ -9,8 +9,15 @@ const outdir = 'dist';
 rmSync(outdir, { recursive: true, force: true });
 mkdirSync(outdir, { recursive: true });
 // build.json lets an unpacked install notice a rebuild and reload itself.
+// Third-party files the dashboard loads from the package (no remote code).
+const VENDOR = {
+  'vendor/easepick.css': 'node_modules/@easepick/bundle/dist/index.css',
+  'vendor/inter.woff2': 'node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2',
+};
 const copyStatic = () => {
   cpSync('static', outdir, { recursive: true });
+  mkdirSync(`${outdir}/vendor`, { recursive: true });
+  for (const [to, from] of Object.entries(VENDOR)) cpSync(from, `${outdir}/${to}`);
   writeFileSync(`${outdir}/build.json`, JSON.stringify({ builtAt: Date.now() }));
 };
 copyStatic();

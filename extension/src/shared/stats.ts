@@ -145,13 +145,28 @@ export function cleanDay(day: DayStats): { day: DayStats; stuckMs: number; stuck
   // remaining videos played.
   const videoMs = Object.values(videos).reduce((a, v) => a + v.watchMs, 0);
   const watchMs = Math.min(day.watchMs, videoMs);
-  const scale = day.watchMs ? watchMs / day.watchMs : 0;
+  // The hour-by-hour split was mostly the frozen tab; rebuild it from when the
+  // remaining videos were actually played (spread over first–last seen).
+  const hourly = Array(24).fill(0) as number[];
+  const dayStart = new Date(`${day.date}T00:00:00`).getTime();
+  const dayEnd = dayStart + 86_400_000;
+  for (const v of Object.values(videos)) {
+    if (!v.watchMs) continue;
+    const from = Math.max(dayStart, Math.min(v.firstAt, dayEnd - 1));
+    const to = Math.max(from + 1, Math.min(dayEnd, v.lastAt));
+    for (let t = from; t < to; ) {
+      const hourEnd = Math.min(to, dayStart + (Math.floor((t - dayStart) / 3_600_000) + 1) * 3_600_000);
+      hourly[new Date(t).getHours()] += (v.watchMs * (hourEnd - t)) / (to - from);
+      t = hourEnd;
+    }
+  }
+  const scale = videoMs ? watchMs / videoMs : 0;
   return {
     day: {
       ...day,
       videos,
       watchMs,
-      hourlyWatchMs: day.hourlyWatchMs.map((ms) => ms * scale),
+      hourlyWatchMs: hourly.map((ms) => ms * scale),
       longestSessionMs: Math.min(day.longestSessionMs, Math.max(watchMs, day.activeMs)),
     },
     stuckMs: day.watchMs - watchMs,

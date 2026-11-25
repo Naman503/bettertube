@@ -1,6 +1,6 @@
 // Regenerates the README screenshots in docs/images/ (dark theme). The
 // dashboard uses made-up demo data so no real viewing history is published.
-// Usage: npm run build && node tests/screenshots.mjs
+// Usage: npm run build && node tests/screenshots.mjs [--only dashboard]
 import { chromium } from 'playwright';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -19,7 +19,7 @@ const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir()
 const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
 const extUrl = (p) => `chrome-extension://${new URL(worker.url()).host}/${p}`;
 
-// ---- demo data: 14 days of made-up watching ----
+// ---- demo data: 60 days of made-up watching ----
 await worker.evaluate(() => {
   const channels = ['Systems Explained', 'Frontend Weekly', 'Data Talks', 'Rust in Practice', 'Design Notes', 'Lo-fi Focus'];
   const titles = [
@@ -33,9 +33,10 @@ await worker.evaluate(() => {
   let seed = 7;
   const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
   const data = {};
-  for (let i = 13; i >= 0; i--) {
+  for (let i = 59; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
+    if (rnd() < 0.12) continue; // some days off
     const n = 2 + Math.floor(rnd() * 6);
     const videos = {};
     let watchMs = 0;
@@ -68,12 +69,17 @@ await worker.evaluate(() => chrome.storage.sync.set({ speedController: { ramp: t
 
 // ---- dashboard ----
 const dash = await context.newPage();
-await dash.setViewportSize({ width: 1280, height: 1180 });
+await dash.setViewportSize({ width: 1280, height: 1260 });
 await dash.goto(extUrl('dashboard.html'));
-await dash.click('#range button[data-range="7"]');
-await dash.waitForTimeout(600);
+await dash.click('#range-btn');
+await dash.locator('.preset-plugin-container > button', { hasText: /^Last 30 days$/ }).click();
+await dash.waitForTimeout(900);
 await dash.screenshot({ path: `${OUT}/dashboard.png` });
 await dash.close();
+if (process.argv.includes('--only') && process.argv.includes('dashboard')) {
+  await context.close();
+  process.exit(0);
+}
 
 // ---- popup tabs ----
 const pop = await context.newPage();

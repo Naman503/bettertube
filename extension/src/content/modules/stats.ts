@@ -68,7 +68,9 @@ function tick() {
   const now = Date.now();
   const video = ctxRef.page.isWatch ? mainVideo() : null;
   const adPlaying = !!video && !video.paused && isAd();
-  let playing = !!video && !video.paused && !video.ended && video.readyState > 2 && !adPlaying;
+  /** What the player says; `playing` below also needs the position to move. */
+  const reportsPlaying = !!video && !video.paused && !video.ended && video.readyState > 2 && !adPlaying;
+  let playing = reportsPlaying;
   const visible = document.visibilityState === 'visible';
   const active = visible && (now - lastInputAt < IDLE_AFTER_MS || playing);
   let dt = now - lastTickAt;
@@ -115,7 +117,7 @@ function tick() {
     };
   }
 
-  wasPlaying = playing;
+  wasPlaying = reportsPlaying;
   if (!active && !playing && !adPlaying && !stalls && !searches) return;
   if (stallStart) {
     stallMs += now - stallStart;

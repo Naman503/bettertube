@@ -11,130 +11,186 @@
     <div class="page">
       <header class="top">
         <div class="brand">
-          <img src="icons/icon-48.png" alt="" width="28" height="28" />
+          <img src="icons/icon-48.png" alt="" width="36" height="36" />
           <div>
             <h1>Your YouTube</h1>
-            <p class="muted" id="range-caption"></p>
+            <p class="caption" id="range-caption"></p>
           </div>
         </div>
         <div class="controls">
-          <button class="icon-btn" id="range-prev" aria-label="Previous period" title="Previous period">‹</button>
+          <button class="icon-btn" id="range-prev" aria-label="Previous period" title="Previous period">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+          </button>
           <div class="picker">
-            <button class="picker-btn" id="range-btn" aria-haspopup="dialog" aria-expanded="false">
+            <button class="picker-btn" id="range-btn" aria-haspopup="dialog">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /><path d="M8 2v4M16 2v4M4 10h16" /></svg>
-              <span id="range-label">Today</span>
+              <span class="picker-text">
+                <span class="picker-label" id="range-label">Today</span>
+                <span class="picker-dates" id="range-dates"></span>
+              </span>
               <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
             </button>
-            <div class="picker-pop" id="range-pop" role="dialog" aria-label="Choose dates" hidden>
-              <div class="presets" id="range-presets" role="listbox" aria-label="Presets"></div>
-              <form class="custom" id="range-custom">
-                <div class="custom-title">Custom range</div>
-                <div class="custom-row">
-                  <label>From <input type="date" id="range-from" required /></label>
-                  <label>To <input type="date" id="range-to" required /></label>
-                </div>
-                <p class="custom-error" id="range-error" hidden></p>
-                <button class="btn primary" type="submit">Apply</button>
-              </form>
-            </div>
+            <input id="range-anchor" class="picker-anchor" tabindex="-1" aria-hidden="true" readonly />
           </div>
-          <button class="icon-btn" id="range-next" aria-label="Next period" title="Next period">›</button>
+          <button class="icon-btn" id="range-next" aria-label="Next period" title="Next period">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+          </button>
         </div>
       </header>
 
       <div id="empty" class="card empty" hidden>
         <h2>No watch data yet</h2>
-        <p class="muted">Watch something on YouTube and your numbers will show up here. BetterTube counts time while a YouTube tab is in front of you or a video is playing.</p>
+        <p class="caption">Watch something on YouTube and your numbers will show up here. BetterTube counts time while a YouTube tab is in front of you or a video is playing.</p>
       </div>
 
-      <div id="content">
-        <p class="note" id="stuck-note" hidden></p>
-        <section class="tiles" id="tiles" aria-label="Summary"></section>
+      <main id="content">
+        <div class="banner" id="stuck-note" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8h.01M11 12h1v4h1" /></svg>
+          <p id="stuck-text"></p>
+        </div>
 
-        <section class="grid-2">
-          <div class="card span-2">
-            <div class="card-head">
-              <h2 id="trend-title">Watch time per day</h2>
-              <div class="segmented small" id="trend-metric" role="tablist" aria-label="Metric">
-                <button role="tab" data-metric="watchMs">Watch time</button>
-                <button role="tab" data-metric="savedMs">Time saved</button>
-                <button role="tab" data-metric="videos">Videos</button>
-                <button role="tab" data-metric="speed">Speed</button>
-              </div>
+        <section class="kpis" id="kpis" aria-label="Key numbers"></section>
+        <section class="stats" id="stats" aria-label="More numbers"></section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <h2 id="trend-title">Watch time</h2>
+              <p class="caption" id="trend-caption"></p>
             </div>
-            <div id="trend-chart"></div>
-            <details class="table-view">
-              <summary>View as table</summary>
-              <div class="table-wrap" id="trend-table"></div>
-            </details>
-          </div>
-
-          <div class="card span-2">
-            <div class="card-head"><h2>Activity calendar</h2><span class="muted" id="calendar-caption">watch time per day</span></div>
-            <div id="calendar"></div>
-          </div>
-
-          <div class="card span-2">
-            <div class="card-head"><h2>When you watch</h2><span class="muted">watch time by weekday and hour</span></div>
-            <div id="weekhour"></div>
-          </div>
-
-          <div class="card">
-            <div class="card-head"><h2>By weekday</h2><span class="muted">average watch time per day</span></div>
-            <div id="weekdays"></div>
-          </div>
-
-          <div class="card">
-            <div class="card-head"><h2>Speed you watch at</h2><span class="muted">share of watch time</span></div>
-            <div id="speeds"></div>
-          </div>
-
-          <div class="card">
-            <div class="card-head"><h2>Video length</h2><span class="muted">videos watched, and how many you finished</span></div>
-            <div id="lengths"></div>
-          </div>
-
-          <div class="card">
-            <div class="card-head"><h2>Habits</h2></div>
-            <div id="habits" class="kv"></div>
-          </div>
-
-          <div class="card">
-            <div class="card-head"><h2>Top channels</h2><span class="muted">by watch time</span></div>
-            <div id="channels"></div>
-          </div>
-
-          <div class="card">
-            <div class="card-head"><h2>Top videos</h2><span class="muted">by watch time</span></div>
-            <div id="top-videos"></div>
-          </div>
-
-          <div class="card span-2">
-            <div class="card-head"><h2>Playback health</h2><span class="muted">buffering, frames, network</span></div>
-            <div class="health-grid">
-              <div id="health" class="kv"></div>
-              <div><h3>Resolution</h3><div id="resolutions"></div></div>
-              <div><h3>Codec</h3><div id="codecs"></div></div>
+            <div class="tabs" id="trend-metric" role="tablist" aria-label="Metric">
+              <button role="tab" data-metric="watchMs">Watch time</button>
+              <button role="tab" data-metric="savedMs">Time saved</button>
+              <button role="tab" data-metric="videos">Videos</button>
+              <button role="tab" data-metric="speed">Speed</button>
             </div>
           </div>
+          <div class="chart" id="trend-chart" style="height: 300px"></div>
+          <details class="table-view">
+            <summary>View as table</summary>
+            <div class="table-wrap" id="trend-table"></div>
+          </details>
+        </section>
 
-          <div class="card span-2">
-            <div class="card-head">
-              <h2>Videos</h2>
-              <div class="table-tools">
-                <input type="search" id="video-search" placeholder="Search titles or channels" aria-label="Search videos" />
-                <span class="muted" id="videos-caption"></span>
-              </div>
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <h2>Activity</h2>
+              <p class="caption" id="calendar-caption">watch time per day</p>
             </div>
-            <div class="table-wrap"><table id="videos"></table></div>
-            <p class="footer-row"><button class="btn" id="videos-more" hidden>Show more</button></p>
+            <div class="heat-legend" id="calendar-legend"></div>
+          </div>
+          <div class="cal-row">
+            <div class="chart" id="calendar" style="height: 190px"></div>
+            <div class="cal-summary" id="calendar-summary"></div>
           </div>
         </section>
-      </div>
+
+        <div class="grid g-3-1">
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <h2>When you watch</h2>
+                <p class="caption">watch time by weekday and hour</p>
+              </div>
+              <div class="heat-legend" id="weekhour-legend"></div>
+            </div>
+            <div class="chart" id="weekhour" style="height: 250px"></div>
+          </section>
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <h2>By weekday</h2>
+                <p class="caption">average per day</p>
+              </div>
+            </div>
+            <div class="chart" id="weekdays" style="height: 250px"></div>
+          </section>
+        </div>
+
+        <div class="grid g-3">
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <h2>Speed you watch at</h2>
+                <p class="caption">share of watch time</p>
+              </div>
+            </div>
+            <div class="donut">
+              <div class="chart" id="speeds" style="height: 190px"></div>
+              <div class="donut-center" id="speeds-center"></div>
+            </div>
+            <ul class="legend-list" id="speeds-legend"></ul>
+          </section>
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <h2>Video length</h2>
+                <p class="caption">videos watched, and how many you finished</p>
+              </div>
+            </div>
+            <div class="chart" id="lengths" style="height: 250px"></div>
+          </section>
+          <section class="card">
+            <div class="card-head"><h2>Habits</h2></div>
+            <div class="habits" id="habits"></div>
+          </section>
+        </div>
+
+        <div class="grid g-2">
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <h2>Top channels</h2>
+                <p class="caption">by watch time</p>
+              </div>
+            </div>
+            <ol class="rank" id="channels"></ol>
+          </section>
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <h2>Top videos</h2>
+                <p class="caption">by watch time</p>
+              </div>
+            </div>
+            <ol class="rank" id="top-videos"></ol>
+          </section>
+        </div>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <h2>Playback health</h2>
+              <p class="caption">buffering, frames and network</p>
+            </div>
+          </div>
+          <div class="health">
+            <div class="habits" id="health"></div>
+            <div><h3>Resolution</h3><div id="resolutions"></div></div>
+            <div><h3>Codec</h3><div id="codecs"></div></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <h2>Videos</h2>
+              <p class="caption" id="videos-caption"></p>
+            </div>
+            <label class="search">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+              <input type="search" id="video-search" placeholder="Search titles or channels" aria-label="Search videos" />
+            </label>
+          </div>
+          <div class="table-wrap"><table class="videos" id="videos"></table></div>
+          <p class="more-row"><button class="btn" id="videos-more" hidden>Show more</button></p>
+        </section>
+      </main>
 
       <footer class="foot">
-        <span class="muted">Stored in this browser for 400 days; only daily totals go into anonymous usage.</span>
-        <span>
+        <span class="caption">Stored in this browser for 400 days. Only daily totals go into anonymous usage.</span>
+        <span class="foot-actions">
           <button id="export" class="btn">Export JSON</button>
           <button id="clear" class="btn danger">Clear all stats</button>
         </span>

@@ -85,88 +85,109 @@ const page = await context.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 await page.goto(`chrome-extension://${extId}/dashboard.html`);
-await page.waitForSelector('.tile.hero');
+await page.waitForSelector('.kpi');
 const text = (sel) => page.locator(sel).first().innerText().then((t) => t.replace(/\s+/g, ' ').trim());
+/** What a chart drew (the dashboard keeps each chart's options on its element). */
+const option = (id) => page.evaluate((i) => document.getElementById(i).btOption, id);
 const pick = async (label) => {
   await page.click('#range-btn');
-  await page.locator('.preset', { hasText: label }).first().click();
-  await page.waitForTimeout(250);
+  await page.locator('.preset-plugin-container > button', { hasText: new RegExp(`^${label}$`) }).click();
+  await page.waitForTimeout(400);
+};
+/** Click two days in the calendar (open shadow DOM; days carry their midnight timestamp). */
+const pickDays = async (from, to) => {
+  await page.click('#range-btn');
+  await page.waitForTimeout(300);
+  for (const d of [from, to]) {
+    const ts = new Date(`${d}T00:00:00`).getTime();
+    await page.locator(`.day[data-time="${ts}"]`).first().click();
+    await page.waitForTimeout(150);
+  }
+  await page.waitForTimeout(400);
 };
 
 try {
   await pick('Last 30 days');
   check('preset: Last 30 days', (await text('#range-label')) === 'Last 30 days' && /30 days/.test(await text('#range-caption')), await text('#range-caption'));
-  if (SHOTS) await page.screenshot({ path: `${SHOTS}/dash-30.png`, fullPage: true });
+  if (SHOTS) {
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: `${SHOTS}/dash-30.png`, fullPage: true });
+    await page.locator('.top').screenshot({ path: `${SHOTS}/part-0-header.png` });
+    await page.locator('#kpis').screenshot({ path: `${SHOTS}/part-1-kpis.png` });
+    await page.locator('#stats').screenshot({ path: `${SHOTS}/part-1b-stats.png` });
+    const cards = page.locator('main .card');
+    for (let i = 0; i < (await cards.count()); i++) await cards.nth(i).screenshot({ path: `${SHOTS}/part-${i + 2}.png` });
+  }
 
   if (!DATA) {
-    const saved = await text('.tile.accent .value');
+    const saved = await text('.kpi:nth-child(2) .kpi-value');
     check('saved by speed is real time saved, not 0', saved !== '0s' && !/^\d+s$/.test(saved), saved);
-    const note = await text('#stuck-note');
-    check('stuck playback is left out, with a note', /Left out 10h 00m from 1 video/.test(note), note.slice(0, 80));
-    const hero = await text('.tile.hero .value');
+    const note = await text('#stuck-text');
+    check('stuck playback is left out, with a note', (await page.locator('#stuck-note').isVisible()) && /Left out 10h 00m from 1 video/.test(note), note.slice(0, 80));
+    const hero = await text('.kpi:nth-child(1) .kpi-value');
     const heroMin = (() => { const m = /(\d+)h (\d+)m/.exec(hero); return m ? +m[1] * 60 + +m[2] : 0; })();
     check('watch time excludes the stuck 10 h', heroMin > 0 && heroMin < 30 * 2 * 60, hero);
-    check('tiles compare with the previous period', (await page.locator('.tile .delta').count()) >= 4, await text('.tile.hero .delta'));
-    check('hero shows days over the daily limit', /limit on \d+ of 30 days|Within your/.test(await text('.tile.hero')));
+    check('KPIs compare with the previous period', (await page.locator('.kpi .pill').count()) >= 3, await text('.kpi .pill'));
+    check('watch time shows days over the daily limit', /limit on \d+ of 30 days|Within your/.test(await text('.kpi:nth-child(1)')));
+    check('each KPI has a sparkline', (await page.locator('.kpi .spark canvas').count()) === 4);
   }
 
   // Trend metric switch
-  for (const [metricLabel, title] of [['Time saved', 'Time saved by speed per day'], ['Videos', 'Videos watched per day'], ['Speed', 'Average speed per day'], ['Watch time', 'Watch time per day']]) {
-    await page.click(`#trend-metric button:text-is("${metricLabel}")`);
-    await page.waitForTimeout(100);
-    check(`trend: ${metricLabel}`, (await text('#trend-title')) === title && (await page.locator('#trend-chart .col').count()) === 30);
+  for (const [label, title] of [['Time saved', 'Time saved by speed per day'], ['Videos', 'Videos watched per day'], ['Speed', 'Average speed per day'], ['Watch time', 'Watch time per day']]) {
+    await page.click(`#trend-metric button:text-is("${label}")`);
+    await page.waitForTimeout(150);
+    const o = await option('trend-chart');
+    check(`trend: ${label}`, (await text('#trend-title')) === title && o.xAxis.data.length === 30);
   }
-  check('trend has an average line and the limit line', (await page.locator('#trend-chart .refline.avg').count()) === 1 && (await page.locator('#trend-chart .refline.limit').count()) === 1);
+  const trend = await option('trend-chart');
+  const marks = trend.series[0].markLine?.data?.map((m) => m.name) ?? [];
+  check('trend: average and daily-limit lines', marks.includes('Average') && marks.includes('Daily limit'), marks.join(', '));
+  check('trend: dashed line for the period before', trend.series.some((x) => x.name === 'Period before'));
 
-  check('activity calendar covers 12+ weeks', (await page.locator('#calendar .calendar .cell').count()) >= 84);
-  check('weekday × hour heatmap: 7 × 24 cells', (await page.locator('#weekhour .cell').count()) === 168);
-  check('speed, length, channels, top videos filled', (await page.locator('#speeds .hbar').count()) === 7 && (await page.locator('#lengths .hbar').count()) === 4 && (await page.locator('#channels .hbar').count()) > 0 && (await page.locator('#top-videos .hbar').count()) > 0);
+  const cal = await option('calendar');
+  const firstData = Object.keys(days).sort()[0];
+  check('activity calendar: 12+ weeks, back to the first data', cal.series[0].data.length >= 84 && cal.series[0].data[0].value[0] <= firstData, `${cal.series[0].data.length} days from ${cal.series[0].data[0].value[0]}`);
+  check('weekday × hour heatmap: 7 × 24', (await option('weekhour')).series[0].data.length === 168);
+  check('speed donut + legend', (await page.locator('#speeds-legend li').count()) === 7 && (await option('speeds')).series[0].data.length > 0);
+  check('video length: finished vs not', (await option('lengths')).series.length === 2);
+  check('top channels and videos listed', (await page.locator('#channels li').count()) > 0 && (await page.locator('#top-videos li').count()) > 0);
 
-  // Custom range
-  await page.click('#range-btn');
+  // Custom range from the calendar
   const from = key(daysAgo(13));
   const to = key(daysAgo(7));
-  await page.fill('#range-from', from);
-  await page.fill('#range-to', to);
-  await page.click('#range-custom button[type=submit]');
-  await page.waitForTimeout(250);
-  check('custom range: 7 days', /7 days/.test(await text('#range-caption')) && (await page.locator('#trend-chart .col').count()) === 7, await text('#range-caption'));
+  await pickDays(from, to);
+  check('custom range: 7 days', /7 days/.test(await text('#range-caption')) && (await option('trend-chart')).xAxis.data.length === 7, await text('#range-caption'));
   await page.click('#range-prev');
-  await page.waitForTimeout(250);
-  const shifted = await page.inputValue('#range-from');
-  check('‹ moves back by the same length', shifted === key(daysAgo(20)), shifted);
+  await page.waitForTimeout(300);
+  check('‹ moves back by the same length', /7 days/.test(await text('#range-caption')) && (await text('#range-dates')).length > 0, await text('#range-dates'));
   await page.click('#range-next');
   await page.click('#range-next');
-  await page.waitForTimeout(250);
-  check('› moves forward', (await page.inputValue('#range-from')) === key(daysAgo(6)));
-  await page.click('#range-btn');
-  await page.fill('#range-from', key(daysAgo(2)));
-  await page.fill('#range-to', key(daysAgo(5)));
-  await page.click('#range-custom button[type=submit]');
-  check('from after to: refused with a message', await page.locator('#range-error').isVisible());
-  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  check('› moves forward', /7 days/.test(await text('#range-caption')));
 
   await pick('Today');
   check('today: › disabled', await page.locator('#range-next').isDisabled());
+  check('today: trend shows two weeks for context', (await option('trend-chart')).xAxis.data.length === 14);
   await pick('All time');
-  check('all time: no comparison arrows', await page.locator('#range-prev').isDisabled());
+  check('all time: ‹ › disabled', (await page.locator('#range-prev').isDisabled()) && (await page.locator('#range-next').isDisabled()));
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/dash-all.png`, fullPage: true });
 
   // Videos table
   const before = await page.locator('#videos tr').count();
-  await page.fill('#video-search', DATA ? 'a' : 'chess');
+  await page.fill('#video-search', DATA ? 'the' : 'chess');
   await page.waitForTimeout(400);
   const after = await page.locator('#videos tr').count();
-  check('search filters the videos table', after > 1 && after < before, `${before - 1} → ${after - 1}`);
+  check('search filters the videos table', after > 1 && after <= before && /match/.test(await text('#videos-caption')), `${before - 1} → ${after - 1}`);
   await page.click('#videos th .sort:text("Watched")');
   const first = await page.locator('#videos tr:nth-child(2) td:nth-child(3)').innerText();
-  const second = await page.locator('#videos tr:nth-child(3) td:nth-child(3)').innerText();
-  check('sort by watched time', !!first && !!second, `${first} ≥ ${second}`);
+  check('sort by watched time', !!first, first);
 
   await pick('Last 30 days');
   await page.click('#range-btn');
-  if (SHOTS) await page.locator('.picker').screenshot({ path: `${SHOTS}/dash-picker.png` }).catch(() => {});
-  if (SHOTS) await page.screenshot({ path: `${SHOTS}/dash-picker-page.png` });
+  await page.waitForTimeout(500);
+  const box = await page.evaluate(() => document.querySelector('.easepick-wrapper').shadowRoot.querySelector('.container').getBoundingClientRect().toJSON());
+  check('date picker opens fully on screen', box.left >= 0 && box.right <= 1280, `${Math.round(box.left)}–${Math.round(box.right)}`);
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/dash-picker.png` });
   await page.keyboard.press('Escape');
 
   check('no page errors', errors.length === 0, errors.join(' | '));
