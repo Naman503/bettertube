@@ -15,6 +15,7 @@ let lastTickAt = Date.now();
 let lastInputAt = Date.now();
 let lastVideoId: string | null = null;
 let lastPos = 0;
+let wasPlaying = false;
 let lastDropped = 0;
 let lastFrames = 0;
 let stalls = 0;
@@ -67,7 +68,7 @@ function tick() {
   const now = Date.now();
   const video = ctxRef.page.isWatch ? mainVideo() : null;
   const adPlaying = !!video && !video.paused && isAd();
-  const playing = !!video && !video.paused && !video.ended && video.readyState > 2 && !adPlaying;
+  let playing = !!video && !video.paused && !video.ended && video.readyState > 2 && !adPlaying;
   const visible = document.visibilityState === 'visible';
   const active = visible && (now - lastInputAt < IDLE_AFTER_MS || playing);
   let dt = now - lastTickAt;
@@ -83,6 +84,9 @@ function tick() {
   if (video && info && info.videoId === ctxRef.page.videoId && !adPlaying) {
     const pos = video.currentTime;
     const sameVideo = lastVideoId === info.videoId;
+    // "Playing" but the position hasn't moved since the last tick: a frozen or
+    // stuck player, not watching. (These once logged 10+ hours a day.)
+    if (playing && wasPlaying && sameVideo && dt >= 2000 && Math.abs(pos - lastPos) < 0.05) playing = false;
     let delta = sameVideo ? pos - lastPos : 0;
     // Only continuous playback counts as video covered: drop any interval that
     // contains a seek (a +10 s jump inside a throttled 1-minute background tick
@@ -111,6 +115,7 @@ function tick() {
     };
   }
 
+  wasPlaying = playing;
   if (!active && !playing && !adPlaying && !stalls && !searches) return;
   if (stallStart) {
     stallMs += now - stallStart;

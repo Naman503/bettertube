@@ -122,7 +122,45 @@ export function fmtDuration(ms: number) {
 }
 
 /** Totals for the in-page badge and popup. */
-export function summarize(day: DayStats | undefined) {
+/**
+ * Before 0.8.0 a video YouTube reported as playing but that never moved (a
+ * frozen or stuck tab) counted as watched, sometimes for 10+ hours a day.
+ * Such a video has lots of watch time and almost no video covered.
+ */
+export const isStuck = (v: VideoStat) => v.watchMs >= 5 * 60_000 && v.contentSec * 1000 < v.watchMs * 0.1;
+
+/** A day with stuck playback taken out, plus how much was taken out. */
+export function cleanDay(day: DayStats): { day: DayStats; stuckMs: number; stuckVideos: number } {
+  const stuck = Object.entries(day.videos).filter(([, v]) => isStuck(v));
+  if (!stuck.length) return { day, stuckMs: 0, stuckVideos: 0 };
+  const videos = { ...day.videos };
+  let stuckMs = 0;
+  for (const [id, v] of stuck) {
+    // Keep whatever really played (counted at 1×), drop the frozen time.
+    const kept = Math.min(v.watchMs, v.contentSec * 1000);
+    stuckMs += v.watchMs - kept;
+    videos[id] = { ...v, watchMs: kept };
+  }
+  // Day watch time is the union across tabs; it can't exceed what the
+  // remaining videos played.
+  const videoMs = Object.values(videos).reduce((a, v) => a + v.watchMs, 0);
+  const watchMs = Math.min(day.watchMs, videoMs);
+  const scale = day.watchMs ? watchMs / day.watchMs : 0;
+  return {
+    day: {
+      ...day,
+      videos,
+      watchMs,
+      hourlyWatchMs: day.hourlyWatchMs.map((ms) => ms * scale),
+      longestSessionMs: Math.min(day.longestSessionMs, Math.max(watchMs, day.activeMs)),
+    },
+    stuckMs: day.watchMs - watchMs,
+    stuckVideos: stuck.length,
+  };
+}
+
+export function summarize(raw: DayStats | undefined) {
+  const day = raw && cleanDay(raw).day;
   if (!day) return { videos: 0, watchMs: 0, activeMs: 0, savedMs: 0, adMs: 0 };
   const videos = Object.values(day.videos);
   const videoWatchMs = videos.reduce((a, v) => a + v.watchMs, 0);
